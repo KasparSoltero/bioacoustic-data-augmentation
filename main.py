@@ -23,6 +23,8 @@ def plot_labels(idx=[0,-1], save_directory='output'):
     rows = (idx[1] - idx[0]) //  3 if (idx[1] - idx[0]) else 1
     if rows > 4:
         rows = 4
+    if rows < 1:
+        rows = 1
         
     # Plotting the spectrograms
     fig, axes = plt.subplots(rows, 3, figsize=(15, 5 * rows))
@@ -43,7 +45,7 @@ def plot_labels(idx=[0,-1], save_directory='output'):
             break
         
         image = Image.open(f'{save_directory}/artificial_dataset/images/train/{image_path}')
-        label_path = f'{save_directory}/artificial_dataset/labels/train/{image_path[:-4]}.txt'
+        label_path = f'{save_directory}/artificial_dataset/labels/train/{image_path[:-4]}.csv'
         # get the corresponding label
         boxes = []
         with open(label_path, 'r') as f:
@@ -566,14 +568,14 @@ def generate_overlays(
         )
         if idx > val_index:
             image_output_path = f'{save_directory}/artificial_dataset/images/val/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{label}.txt'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{label}.csv'
         else:
             image_output_path = f'{save_directory}/artificial_dataset/images/train/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{label}.txt'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{label}.csv'
         
         if len(image_output_path) > 100:
             image_output_path = image_output_path[:90]+'.jpg'
-            txt_output_path = txt_output_path[:90]+'.txt'
+            txt_output_path = txt_output_path[:90]+'.csv'
         # check directory exists
         if not os.path.exists(os.path.dirname(image_output_path)):
             os.makedirs(os.path.dirname(image_output_path))
@@ -585,8 +587,6 @@ def generate_overlays(
         #     img.close()
         # except (IOError, SyntaxError) as e:
         #     print(f"Invalid image after reopening: {e}")
-
-        
 
         # Merge boxes based on IoU
         merged_boxes, merged_classes = merge_boxes_by_class(boxes, classes, iou_threshold=0.1, ios_threshold=0.4)

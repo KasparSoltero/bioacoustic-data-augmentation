@@ -1,7 +1,5 @@
 # bioacoustic data augmentation pipeline
 
-todo: gpu-accelerate
-
 ### - edit config.yaml
 
 ### - provide dataset folder path containing:
@@ -27,13 +25,19 @@ example folder structure:
             2.wav
             tags.csv
 
-vocalisations and negative should be cropped from background:
+vocalisations and negative should be cropped from background e.g.
 ![spec](example_vocalisation_spec.png)
 
 ### output
 
-primary outputs spectrograms in {output}/artificial_dataset<br>
-image + label, train + test<br>
+primary outputs spectrograms and labels.csv in {output}/artificial_dataset<br>
+train + test<br>
 images and labels are associated by filename<br>
+optionally output audio<br>
+randomly repeats some vocalisations (see bottom right, bottom left, center top below)<br>
 
 ![spec](output_example.png)
+
+todo: 
+- gpu-accelerate
+- add .flac option
