@@ -1,0 +1,19 @@
+paths:
+  dataset: 'example_dataset'
+  vocalisations: 'vocalisations'
+  noise: 'noise'
+  negative: 'negative'
+  output: 'output'
+
+# output data config
+output:
+  n: 3
+  val_ratio: 0.8
+  overwrite_output_path: True
+  include_soundfile: True
+  # include_spectrogram: todo
+  rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
+  
+plot:
+  toggle: True
+  color_filter: None #'dusk' for nicer colors

@@ -1,0 +1,10 @@
+pyyaml
+torch
+torchaudio
+numpy
+Pillow
+ultralytics
+matplotlib
+soundfile
+pydub
+chardet
