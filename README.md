@@ -7,7 +7,7 @@ todo: gpu-accelerate
 ### - provide dataset folder path containing:
 1. audio of individual mask-cropped vocalisations (details below)
 2. mask-cropped 'negative' examples for adversarial (optional, details below)
-3. background noise
+3. background noise (files must be longer than output length, default 10s)
 
 each category may have a tags.csv file containing:
 - a 'filename' column.
@@ -27,8 +27,13 @@ example folder structure:
             2.wav
             tags.csv
 
+vocalisations and negative should be cropped from background:
+![spec](example_vocalisation_spec.png)
+
 ### output
 
 primary outputs spectrograms in {output}/artificial_dataset<br>
 image + label, train + test<br>
 images and labels are associated by filename<br>
+
+![spec](output_example.png)

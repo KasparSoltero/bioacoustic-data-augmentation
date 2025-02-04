@@ -650,8 +650,8 @@ generate_overlays(
     n=config['output']['n'],
     clear_dataset=config['output']['overwrite_output_path'],
     sample_rate=48000,
-    final_length_seconds=10,
-    positive_overlay_range=[0,5],
+    final_length_seconds=config['output']['length'],
+    positive_overlay_range=[0,5], #decent through trial and error
     negative_overlay_range=[0,2],
     val_ratio=config['output']['val_ratio'],
     save_wav=config['output']['include_soundfile'],
