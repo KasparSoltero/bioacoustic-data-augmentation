@@ -1,6 +1,8 @@
 # bioacoustic data augmentation pipeline
 
-### - edit config.yaml
+- pip install -r requirements.txt
+- edit config.yaml
+- run main.py
 
 ### - provide dataset folder path containing:
 1. audio of individual mask-cropped vocalisations (details below)
@@ -15,7 +17,7 @@ each category may have a tags.csv file containing:
 
 example folder structure:
 
-    dataset/
+    example_dataset/
         vocalisations/
             1.wav
             tags.csv
