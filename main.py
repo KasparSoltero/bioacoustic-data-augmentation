@@ -212,6 +212,7 @@ def generate_overlays(
         os.system(f'rm -rf {save_directory}/artificial_dataset/labels/train/*')
         os.system(f'rm -rf {save_directory}/artificial_dataset/labels/val/*')
         os.system(f'rm -rf {save_directory}/waveform_storage_mutable/*')
+        os.system(f'rm -rf {save_directory}/species_value_map.csv')
 
     data_root, background_path, positive_paths, negative_paths = get_data_paths
     if data_root is None:

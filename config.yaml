@@ -9,9 +9,9 @@ paths:
 output:
   overwrite_output_path: True
 
-  n: 11
+  n: 3
   val_ratio: 0.8
-  single_class: False
+  single_class: True
   include_soundfile: True
   # include_spectrogram: todo
 
