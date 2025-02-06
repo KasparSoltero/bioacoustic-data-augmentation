@@ -38,9 +38,13 @@ vocalisations and negative should be cropped from background e.g.
 - randomly repeats some vocalisations (see top left, below)
 - labels are stored as integers, so a .csv map is generated
 
+output example:
 ![spec](output_example.png)
 
+the pipeline can generate complicated richly labelled soundscapes.
+![spec](output_example_2.png)
 todo: 
+- mask-label
 - gpu-accelerate
 - add .flac option
 - a way to turn off log scale in config

@@ -692,11 +692,12 @@ generate_overlays(
     clear_dataset=config['output']['overwrite_output_path'],
     sample_rate=48000,
     final_length_seconds=config['output']['length'],
-    positive_overlay_range=[0,5], #decent through trial and error
-    negative_overlay_range=[0,2],
+    positive_overlay_range=config['output']['positive_overlay_range'],
+    negative_overlay_range=config['output']['negative_overlay_range'],
     val_ratio=config['output']['val_ratio'],
     save_wav=config['output']['include_soundfile'],
     plot=config['plot']['toggle'],
     color_mode=color_mode,
     single_class=config['output']['single_class'],
+    repetitions=config['output']['repetitions'],
     )
