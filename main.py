@@ -697,4 +697,5 @@ generate_overlays(
     save_wav=config['output']['include_soundfile'],
     plot=config['plot']['toggle'],
     color_mode=color_mode,
+    single_class=config['output']['single_class'],
     )

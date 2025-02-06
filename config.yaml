@@ -7,12 +7,15 @@ paths:
 
 # output data config
 output:
+  overwrite_output_path: True
+
   n: 11
   val_ratio: 0.8
-  overwrite_output_path: True
+  single_class: False
   include_soundfile: True
   # include_spectrogram: todo
 
+  # todo Logspec
   length: 10 # seconds
   rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
   
