@@ -7,7 +7,7 @@ paths:
 
 # output data config
 output:
-  n: 2
+  n: 11
   val_ratio: 0.8
   overwrite_output_path: True
   include_soundfile: True

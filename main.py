@@ -17,6 +17,13 @@ from colors import custom_color_maps
 
 def plot_labels(idx=[0,-1], save_directory='output'):
     # Plotting the labelsq
+    # check if species value map exists
+    species_value_map = {}
+    if os.path.exists(f'{save_directory}/species_value_map.csv'):
+        with open(f'{save_directory}/species_value_map.csv', 'r') as f:
+            for line in f:
+                key, value = line.strip().split(',') #reading in reverse
+                species_value_map[int(key)] =value
     # Plotting the spectrograms
     # Calculate the number of rows needed
     if idx[1] == -1:
@@ -28,7 +35,7 @@ def plot_labels(idx=[0,-1], save_directory='output'):
         rows = 1
         
     # Plotting the spectrograms
-    fig, axes = plt.subplots(rows, 3, figsize=(15, 5 * rows))
+    fig, axes = plt.subplots(rows, 3, figsize=(10, 3 * rows))
     fig.canvas.manager.set_window_title('') 
     fig.suptitle(f'{save_directory}/artificial_dataset/images/train', fontsize=12)
 
@@ -78,21 +85,30 @@ def plot_labels(idx=[0,-1], save_directory='output'):
             y_min = (1 - y_center) * 24000  # Adjust y-coordinate for upper origin
             box_width = width * 10
             box_height = height * 24000
-            if config['plot']['color_filter'] == 'dusk':
-                # use teal line
-                rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height,
-                                    linewidth=1, edgecolor=custom_color_maps['teal'], facecolor='none')
-            elif box[0] == 0:
-                rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height, 
-                                    linewidth=1, edgecolor='white', facecolor='none', linestyle='--')
-            elif box[0] == 1:
-                rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height, 
-                                    linewidth=1, edgecolor='r', facecolor='none', linestyle='--')
+            rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height,
+                                linewidth=1, edgecolor=custom_color_maps['teal'], facecolor='none')
+            # elif box[0] == 0:
+                # rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height, 
+                                    # linewidth=1, edgecolor='white', facecolor='none', linestyle='--')
+            # elif box[0] == 1:
+                # rect = plt.Rectangle((x_min - box_width/2, y_min - box_height/2), box_width, box_height, 
+                                    # linewidth=1, edgecolor='r', facecolor='none', linestyle='--')
             ax.add_patch(rect)
+            if species_value_map:
+                labeltext = species_value_map[int(box[0])]
+                # insert newlines
+                if ' ' in labeltext:
+                    labeltext = labeltext.split(' ')[0] + '\n' + labeltext.split(' ')[1]
+                ax.text(x_min + box_width/2, y_min + box_height/2, labeltext, fontsize=6, color='#eeeeee')
 
-        ax.set_title(f'{image_path}')
+        yticks = [0, 4000, 8000, 12000, 16000, 20000, 24000]
+        logyticks = map_frequency_to_log_scale(24000, yticks)
+        ax.set_yticks(logyticks)
+        yticklabels = [0, 4, 8, 12, 16, 20, 24]
+        ax.set_yticklabels(yticklabels)
+        ax.set_title(f'{image_path[:1]}')
         ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Frequency (Hz)')
+        ax.set_ylabel('Frequency (kHz)')
     
     plt.tight_layout()
     plt.show()
@@ -127,7 +143,10 @@ def load_input_dataset(data_root, background_path, positive_path, negative_path)
         if f.endswith('.wav') or f.endswith('.WAV'):
             found_filename = f[:-4]
             #  overlay_label for tracing training data, e.g. 5th bird -> bi5
-            positive_datatags[found_filename]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(found_filename))
+            if found_filename in positive_datatags:
+                positive_datatags[found_filename]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(found_filename))
+            else: 
+                positive_datatags[found_filename] = {'filename': found_filename, 'species': 'unknown', 'overlay_label': 'unknown'}
             full_audio_path = os.path.join(data_root, positive_path, f)
             positive_segment_paths.append(full_audio_path)
 
@@ -148,6 +167,12 @@ def load_input_dataset(data_root, background_path, positive_path, negative_path)
             background_noise_paths.append(os.path.join(data_root, background_path, f))
 
     return positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags
+
+def write_species_value_map_to_file(species_value_map, save_directory='output'):
+    # write the species value map to a file
+    with open(f'{save_directory}/species_value_map.csv', 'w') as f:
+        for key, value in species_value_map.items():
+            f.write(f'{value},{key}\n') # reverse order for easy reading
 
 def generate_overlays(
         get_data_paths=[None, None, None, None],
@@ -196,6 +221,9 @@ def generate_overlays(
         positive_paths = ['unknown', 'amphibian', 'reptile', 'mammal', 'insect', 'bird']
         negative_paths = ['anthrophony', 'geophony']
     positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(data_root, background_path, positive_paths, negative_paths)
+
+    # generate species value map
+    species_value_map = {}
 
     val_index = int(n*val_ratio) # validation
 
@@ -298,13 +326,16 @@ def generate_overlays(
                 positive_segment_path = random.choice(positive_segment_paths)
                     
             # check if 'species' is 'chorus' (regardless of single_class because this determines how things are placed in the 10s image)
-            if positive_datatags[os.path.basename(positive_segment_path)[:-4]]['species'] == 'chorus':
-                continue # #TODO fix skip chorus
-                if classes.count(1) > 0:
-                    continue # only one chorus per image
-                species_class=1
-            else:
-                species_class=0
+            # if positive_datatags[os.path.basename(positive_segment_path)[:-4]]['species'] == 'chorus':
+                # continue # #TODO fix skip chorus
+                # if classes.count(1) > 0:
+                    # continue # only one chorus per image
+                # species_class=1
+            # else:
+                # species_class=0
+            species_class = positive_datatags[os.path.basename(positive_segment_path)[:-4]]['species']
+            if not species_class:
+                species_class = 'unknown'
 
             positive_waveform, pos_sr = load_waveform(positive_segment_path)
             positive_waveform = transform_waveform(positive_waveform, resample=[pos_sr,sample_rate])
@@ -488,6 +519,20 @@ def generate_overlays(
             #     specify_freq_range=[((first_pass_freq_start-10)/bg_freq_bins)*24000, ((first_pass_freq_end+10)/bg_freq_bins)*24000]
             # )
 
+            def appendSpeciesClass(classes, species_class, single_class):
+                print(f' {species_class} ', end='')
+                if single_class:
+                    classes.append(0)
+                else:
+                    if species_class in species_value_map:
+                        classes.append(species_value_map[species_class])
+                    else:
+                        classes.append(len(species_value_map))
+                        species_value_map[species_class] = len(species_value_map)
+                        write_species_value_map_to_file(species_value_map, save_directory)
+                    print(f'    {species_class}')
+                return classes
+
             overlay = torch.zeros_like(bg_noise_waveform_cropped)
             overlay[:,max(0,start) : max(0,start) + positive_waveform_cropped.shape[1]] = positive_waveform_cropped
             new_waveform += overlay
@@ -496,10 +541,7 @@ def generate_overlays(
             freq_start, freq_end = map_frequency_to_log_scale(bg_freq_bins, [freq_start, freq_end])
             # add bounding box to list, in units of spectrogram time and log frequency bins
             boxes.append([max(start_time_offset,start_time_bins+start_time_offset), max(end_time_offset, start_time_bins+end_time_offset), freq_start, freq_end])
-            if single_class:
-                classes.append(0)
-            else:
-                classes.append(species_class)
+            classes = appendSpeciesClass(classes, species_class, single_class)
             label += positive_datatags[os.path.basename(positive_segment_path)[:-4]]['overlay_label']
             label += 'p' + f"{pos_snr:.1f}" # power label
 
@@ -521,10 +563,7 @@ def generate_overlays(
                             succuessful_positive_overlays += 1
 
                             boxes.append([new_start_bins+start_time_offset, new_start_bins+end_time_offset, freq_start, freq_end])
-                            if single_class:
-                                classes.append(0)
-                            else:
-                                classes.append(species_class)
+                            classes = appendSpeciesClass(classes, species_class, single_class)
                             label += 'x' # repetition
                         else:
                             break

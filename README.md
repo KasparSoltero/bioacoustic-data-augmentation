@@ -32,14 +32,15 @@ vocalisations and negative should be cropped from background e.g.
 
 ### output
 
-primary outputs spectrograms and labels.csv in {output}/artificial_dataset<br>
-train + test<br>
-images and labels are associated by filename<br>
-optionally output audio<br>
-randomly repeats some vocalisations (see bottom right, bottom left, center top below)<br>
+- primary outputs spectrograms and labels.csv in {output}/artificial_dataset
+- train + test
+- optionally output audio
+- randomly repeats some vocalisations (see top left, below)
+- labels are stored as integers, so a .csv map is generated
 
 ![spec](output_example.png)
 
 todo: 
 - gpu-accelerate
 - add .flac option
+- a way to turn off log scale in config
