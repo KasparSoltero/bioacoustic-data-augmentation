@@ -32,7 +32,8 @@ vocalisations and negative should be cropped from background e.g.
 
 ### output
 
-- primary outputs spectrograms and labels.csv in {output}/artificial_dataset
+- primary outputs spectrograms and labels in {output}/artificial_dataset
+- labels are format: class, x_center, y_center, width, height
 - train + test
 - optionally output audio
 - randomly repeats some vocalisations (see top left, below)
@@ -41,7 +42,7 @@ vocalisations and negative should be cropped from background e.g.
 output example:
 ![spec](output_example.png)
 
-the pipeline can generate complicated richly labelled soundscapes.
+the function can generate complicated box labelled soundscapes.
 ![spec](output_example_2.png)
 todo: 
 - mask-label

@@ -53,15 +53,15 @@ def plot_labels(idx=[0,-1], save_directory='output'):
             break
         
         image = Image.open(f'{save_directory}/artificial_dataset/images/train/{image_path}')
-        label_path = f'{save_directory}/artificial_dataset/labels/train/{image_path[:-4]}.csv'
+        label_path = f'{save_directory}/artificial_dataset/labels/train/{image_path[:-4]}.txt'
         # get the corresponding label
         boxes = []
         with open(label_path, 'r') as f:
-            # skip the first line
-            next(f)
             for line in f:
                 # Split on commas and strip whitespace
-                values = [value.strip() for value in line.split(',')]
+                # values = [value.strip() for value in line.split(',')]
+                # values separated by spaces
+                values = [value.strip() for value in line.split(' ')]
                 
                 # Convert to float, ignoring empty strings
                 class_id, x_center, y_center, width, height = [float(value) for value in values if value]
@@ -609,14 +609,14 @@ def generate_overlays(
         )
         if idx > val_index:
             image_output_path = f'{save_directory}/artificial_dataset/images/val/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{label}.csv'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{label}.txt'
         else:
             image_output_path = f'{save_directory}/artificial_dataset/images/train/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{label}.csv'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{label}.txt'
         
         if len(image_output_path) > 100:
             image_output_path = image_output_path[:90]+'.jpg'
-            txt_output_path = txt_output_path[:90]+'.csv'
+            txt_output_path = txt_output_path[:90]+'.txt'
         # check directory exists
         if not os.path.exists(os.path.dirname(image_output_path)):
             os.makedirs(os.path.dirname(image_output_path))
@@ -651,8 +651,6 @@ def generate_overlays(
         if not os.path.exists(os.path.dirname(txt_output_path)):
             os.makedirs(os.path.dirname(txt_output_path))
         with open(txt_output_path, 'w') as f:
-            # generate column headers
-            f.write('class, x_center, y_center, width, height\n')
             for box, species_class in zip(merged_boxes, merged_classes):
                 x_center = (box[0] + box[1]) / 2 / bg_time_bins
                 width = (box[1] - box[0]) / bg_time_bins
@@ -665,7 +663,7 @@ def generate_overlays(
                     print(f"{idx}: Error, box out of bounds!\n\n******\n\n******\n\n*******\n\n")
 
                 # Write to file in the format [class_id x_center y_center width height]
-                f.write(f'{species_class}, {x_center}, {y_center}, {width}, {height}\n')
+                f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
 
     if(plot):
         plot_labels([0,n], save_directory)
