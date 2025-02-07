@@ -1,5 +1,5 @@
 paths:
-  dataset: 'dataset'
+  dataset: 'example_dataset'
   vocalisations: 'vocalisations'
   noise: 'noise'
   negative: 'negative'
@@ -21,8 +21,8 @@ output:
 
   # todo Logspec
   length: 10 # seconds
-  rainbow_frequency: False # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
+  rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
   
 plot:
   toggle: True
-  color_filter: 'dusk' #'dusk' for nicer colors
+  # color_filter: 'dusk' #'dusk' for nicer colors
