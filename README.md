@@ -28,7 +28,7 @@ example folder structure:
             tags.csv
 
 vocalisations and negative should be cropped from background e.g.
-![spec](example_vocalisation_spec.png)
+![spec](output_example_1.png)
 
 ### output
 
