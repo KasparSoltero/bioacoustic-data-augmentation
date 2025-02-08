@@ -263,4 +263,21 @@ dusk_colormap = LinearSegmentedColormap.from_list("dusk", [tuple(color/255 for c
 custom_color_maps = {
     'dusk': dusk_colormap,
     'teal': '#00FFFF',
+    'rotary': [
+        '#ff0000', 
+        '#59ff00', 
+        '#001eff', 
+        '#fb00ff',
+        '#00aeff',
+        '#ff8c00', 
+        '#6f00ff', 
+        '#e6ff00', 
+        '#00ffc3', 
+        ]
 }
+
+def hex_to_rgb(hex_color):
+    # Remove the '#' if present
+    hex_color = hex_color.lstrip('#')
+    # Convert to RGB
+    return [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]

@@ -36,16 +36,16 @@ vocalisations and negative should be cropped from background e.g.
 - labels are format: class, x_center, y_center, width, height
 - train + test
 - optionally output audio
+- optionally output vocalisation masks (as COCO json file)
 - randomly repeats some vocalisations (see top left, below)
 - labels are stored as integers, so a .csv map is generated
 
 output example:
 ![spec](output_example.png)
 
-the function can generate complicated box labelled soundscapes.
+the function can generate richly labelled training data.
 ![spec](output_example_2.png)
 todo: 
-- mask-label
 - gpu-accelerate
 - add .flac option
 - a way to turn off log scale in config

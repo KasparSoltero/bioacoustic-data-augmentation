@@ -15,14 +15,19 @@ output:
   include_soundfile: True
   # include_spectrogram: todo
 
+  generate_masks: True
+
   positive_overlay_range: [0,5]
+  # positive_overlay_range: [6,6]
   negative_overlay_range: [0,2]
+  # negative_overlay_range: [2,2]
   repetitions: [1,10] # repetitions occur 50% of the time
+  # repetitions: [0,0]
 
   # todo Logspec
   length: 10 # seconds
-  rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
+  rainbow_frequency: False # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
   
 plot:
   toggle: True
-  # color_filter: 'dusk' #'dusk' for nicer colors
+  color_filter: 'dusk' # 'dusk' # 'dusk' or None

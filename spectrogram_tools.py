@@ -512,6 +512,113 @@ def load_spectrogram_chunks(path, chunk_length=10, overlap=0.5, resample_rate=48
     )
     return [spec_transform(chunk) for chunk in chunks]
 
+# masks
+def generate_masks(overlay_waveform, image_id, category_id, last_box, threshold_db=10, log_scale=True, debug=False):
+    """
+    Generate masks from positive overlay spectrogram.
+    Args:
+        positive_spec: Spectrogram of positive overlay (freq x time)
+    """
+    overlay_spec = transform_waveform(overlay_waveform, to_spec='power')
+    if log_scale:
+        overlay_spec = log_scale_spectrogram(overlay_spec)
+
+    # Generate binary mask
+    spec_db = 10 * torch.log10(overlay_spec + 1e-10)
+    mask = (spec_db > threshold_db).numpy().astype(np.uint8)
+    # remove batch dimension
+    mask = mask[0]
+    if debug:
+        print(f'Mask shape: {mask.shape}')
+        # plot display mask, vocalisation, mask @ threshold 0
+        fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+        axs[0].imshow(mask, aspect='auto', origin='lower')
+        axs[0].set_title('Mask')
+        axs[1].imshow(spec_db[0], aspect='auto', origin='lower')
+        axs[1].set_title('Spectrogram (dB)')
+        mask0 = (spec_db > -10).numpy().astype(np.uint8)[0]
+        axs[2].imshow(mask0, aspect='auto', origin='lower')
+        axs[2].set_title('Mask @ -10 dB')
+        plt.show()
+
+    # Create COCO annotation
+    rle = rle_encode(mask)
+
+    # convert bbox to COCO
+    coco_bbox = [
+        last_box[0],  # x
+        last_box[2],  # y
+        last_box[1] - last_box[0],  # width
+        last_box[3] - last_box[2]   # height
+    ]
+    
+    annotation = {
+        'segmentation': {
+            'counts': rle,
+            'size': list(mask.shape)  # [freq, time]
+        },
+        'area': float(mask.sum()),
+        'iscrowd': 0,
+        'image_id': image_id,
+        'bbox': coco_bbox,
+        'category_id': category_id
+    }
+    
+    return annotation
+
+def rle_encode(mask):
+    """
+    Convert binary mask to standard RLE encoding.
+    Returns: List of integers representing counts of 0s and 1s alternately,
+             starting with count of 0s.
+    """
+    # Ensure mask is flattened
+    pixels = mask.flatten()
+    
+    # Initialize results
+    counts = []
+    count = 0
+    last_value = 0  # Start counting zeros
+    
+    # Count runs
+    for pixel in pixels:
+        if pixel == last_value:
+            count += 1
+        else:
+            counts.append(count)
+            count = 1
+            last_value = pixel
+    
+    # Append final count
+    counts.append(count)
+    
+    # If we ended with 1s, add a 0 count
+    if last_value == 1:
+        counts.append(0)
+        
+    return counts
+
+def rle_decode(counts, shape):
+    """
+    Decode standard RLE encoding back to binary mask.
+    counts: List of integers representing alternate counts of 0s and 1s
+    shape: Target shape of the mask (height, width)
+    """
+    # Initialize flat mask
+    mask = np.zeros(shape[0] * shape[1], dtype=bool)
+    
+    # Current position in the mask
+    idx = 0
+    
+    # Fill runs
+    for i, count in enumerate(counts):
+        value = (i % 2) == 1  # odd indices are 1s, even indices are 0s
+        if count > 0:
+            mask[idx:idx + count] = value
+            idx += count
+    
+    return mask.reshape(shape)
+
 # main spectrogram functions
 def spec_to_image(spectrogram, image_normalise=0.2):
     # make ipeg image

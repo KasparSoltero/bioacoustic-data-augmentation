@@ -1,3 +1,4 @@
+import json
 import yaml
 import os
 import torchaudio
@@ -12,8 +13,8 @@ import csv
 import chardet
 from matplotlib.ticker import PercentFormatter
 
-from spectrogram_tools import spectrogram_transformed, spec_to_audio, crop_overlay_waveform, load_spectrogram, load_waveform, transform_waveform, map_frequency_to_log_scale, map_frequency_to_linear_scale, merge_boxes_by_class, pcen
-from colors import custom_color_maps
+from spectrogram_tools import spectrogram_transformed, spec_to_audio, crop_overlay_waveform, load_waveform, transform_waveform, map_frequency_to_log_scale, map_frequency_to_linear_scale, merge_boxes_by_class, generate_masks, rle_decode
+from colors import custom_color_maps, hex_to_rgb
 
 def plot_labels(idx=[0,-1], save_directory='output'):
     # Plotting the labelsq
@@ -29,13 +30,15 @@ def plot_labels(idx=[0,-1], save_directory='output'):
     if idx[1] == -1:
         idx[1] = 9
     rows = (idx[1] - idx[0]) //  3 if (idx[1] - idx[0]) else 1
-    if rows > 4:
-        rows = 4
     if rows < 1:
         rows = 1
+    if config['output']['generate_masks']:
+        rows *= 2
+    if rows > 4:
+        rows = 4
         
     # Plotting the spectrograms
-    fig, axes = plt.subplots(rows, 3, figsize=(10, 3 * rows))
+    fig, axes = plt.subplots(rows, 3, figsize=(15, 4 * rows))
     fig.canvas.manager.set_window_title('') 
     fig.suptitle(f'{save_directory}/artificial_dataset/images/train', fontsize=12)
 
@@ -54,6 +57,8 @@ def plot_labels(idx=[0,-1], save_directory='output'):
         
         image = Image.open(f'{save_directory}/artificial_dataset/images/train/{image_path}')
         label_path = f'{save_directory}/artificial_dataset/labels/train/{image_path[:-4]}.txt'
+        
+        
         # get the corresponding label
         boxes = []
         with open(label_path, 'r') as f:
@@ -68,16 +73,10 @@ def plot_labels(idx=[0,-1], save_directory='output'):
                 
                 boxes.append([class_id, x_center, y_center, width, height])
 
-        # plot image
+        # plot image and mask together
         ax = axes[row_idx][col_idx]
-        if config['plot']['color_filter'] == 'dusk':
-            im = ax.imshow(np.array(image), aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap=custom_color_maps['dusk'])
-        else:
-            if config['output']['rainbow_frequency']:
-                im = ax.imshow(np.array(image), aspect='auto', origin='upper', extent=[0, 10, 0, 24000])
-            else:
-                im = ax.imshow(np.array(image), aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap='gray')
-
+        image_array = np.array(image)
+    
         # plot boxes
         for box in boxes:
             x_center, y_center, width, height = box[1:]
@@ -100,6 +99,76 @@ def plot_labels(idx=[0,-1], save_directory='output'):
                 if ' ' in labeltext:
                     labeltext = labeltext.split(' ')[0] + '\n' + labeltext.split(' ')[1]
                 ax.text(x_min + box_width/2, y_min + box_height/2, labeltext, fontsize=6, color='#eeeeee')
+
+        if config['output']['generate_masks']:
+            # Load COCO annotations
+            coco_path = f'{save_directory}/artificial_dataset/annotations.json'
+            if os.path.exists(coco_path):
+                with open(coco_path, 'r') as f:
+                    coco_data = json.load(f)
+                
+                # Find annotations for current image
+                image_name = image_path[:-4]  # Remove .jpg extension
+                image_id = None
+                for img in coco_data['images']:
+                    if img['file_name'].startswith(image_name):
+                        image_id = img['id']
+                        break
+                
+                if image_id is not None:
+                    # Get all annotations for this image
+                    image_annotations = [ann for ann in coco_data['annotations'] 
+                                      if ann['image_id'] == image_id]
+                    print(f'found {len(image_annotations)} annotations for {image_name}')
+                    
+                    # Create a colored mask overlay
+                    mask_overlay = np.zeros_like(image_array)
+                    if len(mask_overlay.shape) != 3:
+                        # add 3 channels
+                        mask_overlay = np.stack([mask_overlay, mask_overlay, mask_overlay], axis=-1)
+                    
+                    for j, ann in enumerate(image_annotations):
+                        mask_counts = ann['segmentation']['counts']
+                        mask_size = ann['segmentation']['size']
+                        mask = rle_decode(mask_counts, mask_size)
+                        
+                        mask = mask.reshape(mask_size)  # Should be [freq, time]
+
+                        # Convert mask to image size maintaining aspect ratio
+                        freq_bins, time_bins = mask.shape
+                        scale_freq = image_array.shape[0]/freq_bins
+                        scale_time = image_array.shape[1]/time_bins
+                        new_freq = int(freq_bins * scale_freq)
+                        new_time = int(time_bins * scale_time)
+
+                        mask_resized = np.array(Image.fromarray(mask.astype(np.uint8) * 255).resize(
+                            (new_time, new_freq), 
+                            Image.NEAREST
+                        ))
+                        
+                        color = hex_to_rgb(custom_color_maps['rotary'][j % len(custom_color_maps['rotary'])])
+                        mask_overlay[mask_resized > 0] = color
+                    # invert y axis
+                    mask_overlay = np.flipud(mask_overlay)
+
+        if config['output']['generate_masks']:
+            # plot the masks on the next axes
+            thisax = axes[row_idx+1][col_idx]
+            thisax.imshow(mask_overlay, aspect='auto', origin='upper')
+            thisax.set_xticks([])
+            thisax.set_yticks([])
+        #     # sum arrays
+        #     # image_array = image_array + mask_overlay
+        #     image_array = mask_overlay
+
+        # Display image with mask overlay
+        if config['plot']['color_filter'] == 'dusk':
+            im = ax.imshow(image_array, aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap=custom_color_maps['dusk'])
+        else:
+            if config['output']['rainbow_frequency']:
+                im = ax.imshow(image_array, aspect='auto', origin='upper', extent=[0, 10, 0, 24000])
+            else:
+                im = ax.imshow(image_array, aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap='gray')
 
         yticks = [0, 4000, 8000, 12000, 16000, 20000, 24000]
         logyticks = map_frequency_to_log_scale(24000, yticks)
@@ -180,6 +249,7 @@ def generate_overlays(
         n=1,
         sample_rate=48000,
         final_length_seconds=10,
+        output_generate_masks=False,
         positive_overlay_range=[1,1],
         negative_overlay_range=[0,0],
         save_wav=False,
@@ -223,8 +293,17 @@ def generate_overlays(
         negative_paths = ['anthrophony', 'geophony']
     positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(data_root, background_path, positive_paths, negative_paths)
 
+    # load config
     # generate species value map
     species_value_map = {}
+    
+    if output_generate_masks:
+        coco_dataset = {
+            'images': [],
+            'annotations': [],
+            'categories': []
+        }
+        coco_annotations = []
 
     val_index = int(n*val_ratio) # validation
 
@@ -342,7 +421,7 @@ def generate_overlays(
             positive_waveform = transform_waveform(positive_waveform, resample=[pos_sr,sample_rate])
             positive_waveform_cropped, start = crop_overlay_waveform(bg_noise_waveform_cropped.shape[1], positive_waveform)
             
-            # attempt to place segment at least 1 seconds from other starts #TODO dont like
+            # attempt to place segment at least 1 seconds from other starts #TODO this introduces a bias
             if positive_waveform.shape[1] < bg_noise_waveform_cropped.shape[1]:
                 for i in range(20):
                     positive_waveform_cropped, start = crop_overlay_waveform(bg_noise_waveform_cropped.shape[1], positive_waveform)
@@ -546,6 +625,19 @@ def generate_overlays(
             label += positive_datatags[os.path.basename(positive_segment_path)[:-4]]['overlay_label']
             label += 'p' + f"{pos_snr:.1f}" # power label
 
+            if output_generate_masks:
+                # Generate mask annotation
+                mask_annotation = generate_masks(
+                    overlay_waveform=overlay,
+                    image_id=idx,
+                    category_id=classes[-1],
+                    last_box=boxes[-1],
+                    threshold_db=10,
+                    log_scale=True,
+                    debug=False
+                )
+                coco_annotations.append(mask_annotation)
+
             # potentially repeat song
             if repetitions:
                 if random.uniform(0,1)>0.5:
@@ -566,6 +658,17 @@ def generate_overlays(
                             boxes.append([new_start_bins+start_time_offset, new_start_bins+end_time_offset, freq_start, freq_end])
                             classes = appendSpeciesClass(classes, species_class, single_class)
                             label += 'x' # repetition
+                            if output_generate_masks:
+                                mask_annotation = generate_masks(
+                                    overlay_waveform=overlay,
+                                    image_id=idx,
+                                    category_id=classes[-1],
+                                    last_box=boxes[-1],
+                                    threshold_db=10,
+                                    log_scale=True,
+                                    debug=False
+                                )
+                                coco_annotations.append(mask_annotation)
                         else:
                             break
             
@@ -608,11 +711,11 @@ def generate_overlays(
             resize=(640, 640),
         )
         if idx > val_index:
-            image_output_path = f'{save_directory}/artificial_dataset/images/val/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{label}.txt'
+            image_output_path = f'{save_directory}/artificial_dataset/images/val/{idx}.jpg'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{idx}.txt'
         else:
-            image_output_path = f'{save_directory}/artificial_dataset/images/train/{label}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{label}.txt'
+            image_output_path = f'{save_directory}/artificial_dataset/images/train/{idx}.jpg'
+            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{idx}.txt'
         
         if len(image_output_path) > 100:
             image_output_path = image_output_path[:90]+'.jpg'
@@ -664,6 +767,30 @@ def generate_overlays(
 
                 # Write to file in the format [class_id x_center y_center width height]
                 f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
+        if output_generate_masks:
+            # Add images info
+            for i in range(n):
+                coco_dataset['images'].append({
+                    'id': i,
+                    'file_name': f'{i}.jpg',
+                    'width': 640,
+                    'height': 640
+                })
+            
+            # Add categories
+            for species, idx in species_value_map.items():
+                coco_dataset['categories'].append({
+                    'id': idx,
+                    'name': species,
+                    'supercategory': 'vocalisation'
+                })
+            
+            # Add annotations
+            coco_dataset['annotations'] = coco_annotations
+            
+            # Save COCO dataset
+            with open(f'{save_directory}/artificial_dataset/annotations.json', 'w') as f:
+                json.dump(coco_dataset, f)
 
     if(plot):
         plot_labels([0,n], save_directory)
@@ -690,6 +817,9 @@ generate_overlays(
     clear_dataset=config['output']['overwrite_output_path'],
     sample_rate=48000,
     final_length_seconds=config['output']['length'],
+
+    output_generate_masks=config['output']['generate_masks'],
+
     positive_overlay_range=config['output']['positive_overlay_range'],
     negative_overlay_range=config['output']['negative_overlay_range'],
     val_ratio=config['output']['val_ratio'],
