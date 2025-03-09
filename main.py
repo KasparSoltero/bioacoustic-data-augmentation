@@ -183,57 +183,66 @@ def plot_labels(idx=[0,-1], save_directory='output'):
     plt.show()
     plt.close()
 
-def read_tags(path):
+def read_tags(path, config, default_species='unknown'):
     # reads a csv, returns dictionaries of filenames with each column's attributes
-    if os.path.exists(path):
-        with open(path, 'rb') as raw_file:
+    tags_path = os.path.join(path, 'tags.csv')
+    if os.path.exists(tags_path):
+        with open(tags_path, 'rb') as raw_file:
             result = chardet.detect(raw_file.read())
             encoding = result['encoding']
         
-        with open(path, mode='r', newline='', encoding=encoding) as file:
+        with open(tags_path, mode='r', newline='', encoding=encoding) as file:
             reader = csv.DictReader(file)
             tags_data = {}
             for row in reader:
                 filename = row['filename']
-                if filename.endswith('.wav') or filename.endswith('.WAV'):
-                    filename = filename[:-4]
+                filename = filename.split('.')[0]
                 tags_data[filename] = {}
                 for header in reader.fieldnames:
                     tags_data[filename][header] = row[header]
                 
         return tags_data
     else:
-        return None
+        tags_data = {}
+        for f in os.listdir(path):
+            for ext in config['input']['allowed_files']:
+                if f.endswith(ext):
+                    found_filename = f.split('.')[0]
+                    tags_data[found_filename] = {'filename': found_filename, 'species': default_species}
+        return tags_data
 
-def load_input_dataset(data_root, background_path, positive_path, negative_path):
+def load_input_dataset(data_root, background_path, positive_path, negative_path, config):
     positive_segment_paths = []
-    positive_datatags = read_tags(os.path.join(data_root, positive_path, 'tags.csv'))
+    positive_datatags = read_tags(os.path.join(data_root, positive_path), config, 1)
     for f in os.listdir(os.path.join(data_root, positive_path)):
-        if f.endswith('.wav') or f.endswith('.WAV'):
-            found_filename = f[:-4]
-            #  overlay_label for tracing training data, e.g. 5th bird -> bi5
-            if found_filename in positive_datatags:
-                positive_datatags[found_filename]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(found_filename))
-            else: 
-                positive_datatags[found_filename] = {'filename': found_filename, 'species': 'unknown', 'overlay_label': 'unknown'}
-            full_audio_path = os.path.join(data_root, positive_path, f)
-            positive_segment_paths.append(full_audio_path)
+        for ext in config['input']['allowed_files']:
+            if f.endswith(ext):
+                found_filename = f.split('.')[0]
+                #  overlay_label for tracing training data, e.g. 5th bird -> bi5
+                if found_filename in positive_datatags:
+                    positive_datatags[found_filename]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(found_filename))
+                else: 
+                    positive_datatags[found_filename] = {'filename': found_filename, 'species': 'unknown', 'overlay_label': 'unknown'}
+                full_audio_path = os.path.join(data_root, positive_path, f)
+                positive_segment_paths.append(full_audio_path)
 
     negative_segment_paths = []
-    negative_datatags = read_tags(os.path.join(data_root, negative_path, 'tags.csv'))
+    negative_datatags = read_tags(os.path.join(data_root, negative_path), config, 0)
     for f in os.listdir(os.path.join(data_root, negative_path)):
-        if f.endswith('.wav') or f.endswith('.WAV'):
-            found_filename = f[:-4]
-            negative_datatags[found_filename]['overlay_label'] = negative_path[:2]+str(list(negative_datatags.keys()).index(found_filename))
-            negative_segment_paths.append(os.path.join(data_root, negative_path, f))
+        for ext in config['input']['allowed_files']:
+            if f.endswith(ext):
+                found_filename = f.split('.')[0]
+                negative_datatags[found_filename]['overlay_label'] = negative_path[:2]+str(list(negative_datatags.keys()).index(found_filename))
+                negative_segment_paths.append(os.path.join(data_root, negative_path, f))
 
     background_noise_paths = []
-    background_datatags = read_tags(os.path.join(data_root, background_path, 'tags.csv'))
+    background_datatags = read_tags(os.path.join(data_root, background_path), config)
     for f in os.listdir(os.path.join(data_root, background_path)):
-        if f.endswith('.wav') or f.endswith('.WAV'):
-            found_filename = f[:-4]
-            background_datatags[found_filename]['overlay_label'] = 'bg'+str(list(background_datatags.keys()).index(found_filename))
-            background_noise_paths.append(os.path.join(data_root, background_path, f))
+        for ext in config['input']['allowed_files']:
+            if f.endswith(ext):
+                found_filename = f.split('.')[0]
+                background_datatags[found_filename]['overlay_label'] = 'bg'+str(list(background_datatags.keys()).index(found_filename))
+                background_noise_paths.append(os.path.join(data_root, background_path, f))
 
     return positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags
 
@@ -244,6 +253,7 @@ def write_species_value_map_to_file(species_value_map, save_directory='output'):
             f.write(f'{value},{key}\n') # reverse order for easy reading
 
 def generate_overlays(
+        config,
         get_data_paths=[None, None, None, None],
         save_directory='datasets_mutable',
         n=1,
@@ -279,9 +289,10 @@ def generate_overlays(
     if clear_dataset:
         os.system(f'rm -rf {save_directory}/artificial_dataset/images/train/*')
         os.system(f'rm -rf {save_directory}/artificial_dataset/images/val/*')
-        os.system(f'rm -rf {save_directory}/artificial_dataset/labels/train/*')
-        os.system(f'rm -rf {save_directory}/artificial_dataset/labels/val/*')
-        os.system(f'rm -rf {save_directory}/waveform_storage_mutable/*')
+        os.system(f'rm -rf {save_directory}/artificial_dataset/box_labels/train/*')
+        os.system(f'rm -rf {save_directory}/artificial_dataset/box_labels/val/*')
+        os.system(f'rm -rf {save_directory}/artificial_dataset/mask_annotations.json')
+        os.system(f'rm -rf {save_directory}/artificial_dataset/coarse_annotations/kaytoo_train_metadata.csv')
         os.system(f'rm -rf {save_directory}/species_value_map.csv')
 
     data_root, background_path, positive_paths, negative_paths = get_data_paths
@@ -291,19 +302,24 @@ def generate_overlays(
     if positive_paths is None:
         positive_paths = ['unknown', 'amphibian', 'reptile', 'mammal', 'insect', 'bird']
         negative_paths = ['anthrophony', 'geophony']
-    positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(data_root, background_path, positive_paths, negative_paths)
+    positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(data_root, background_path, positive_paths, negative_paths, config)
 
     # load config
     # generate species value map
     species_value_map = {}
     
-    if output_generate_masks:
+    if config['include_masks']:
         coco_dataset = {
             'images': [],
             'annotations': [],
             'categories': []
         }
         coco_annotations = []
+    if config['include_kaytoo']:
+        # write the header
+        labels_path = f'{save_directory}/artificial_dataset/coarse_annotations/kaytoo_train_metadata.csv'
+        with open(labels_path, 'w') as f:
+            f.write('filename,primary_label,secondary_labels\n')
 
     val_index = int(n*val_ratio) # validation
 
@@ -601,16 +617,13 @@ def generate_overlays(
 
             def appendSpeciesClass(classes, species_class, single_class):
                 print(f' {species_class} ', end='')
-                if single_class:
-                    classes.append(0)
+                if species_class in species_value_map:
+                    classes.append(species_value_map[species_class])
                 else:
-                    if species_class in species_value_map:
-                        classes.append(species_value_map[species_class])
-                    else:
-                        classes.append(len(species_value_map))
-                        species_value_map[species_class] = len(species_value_map)
-                        write_species_value_map_to_file(species_value_map, save_directory)
-                    print(f'    {species_class}')
+                    classes.append(len(species_value_map))
+                    species_value_map[species_class] = len(species_value_map)
+                    write_species_value_map_to_file(species_value_map, save_directory)
+                print(f'    {species_class}')
                 return classes
 
             overlay = torch.zeros_like(bg_noise_waveform_cropped)
@@ -678,96 +691,97 @@ def generate_overlays(
             highpass_hz=highpass_hz,
             lowpass_hz=lowpass_hz
         )
-        
+
         # final normalisation, which is applied to real audio also
         final_audio = spectrogram_transformed(
             final_audio,
             set_db=-10,
         )
+        if idx > val_index:
+            save_files_path = f"val/{idx}"
+        else:
+            save_files_path = f"train/{idx}"
 
-        if(save_wav):
-            wav_path = f"{save_directory}/waveform_storage_mutable/{label}"
+        if(config['include_soundfile']):
+            wav_path = f"{save_directory}/artificial_dataset/audio/{save_files_path}"
             spec_to_audio(final_audio, save_to=wav_path, energy_type='power')
         
-        # temp_unlog_boxes = []
-        # for box in boxes:
-        #     y1, y2 = map_frequency_to_linear_scale(bg_freq_bins, [box[2], box[3]])
-        #     temp_unlog_boxes.append([box[0], box[1], y1, y2])
-        # plot_spectrogram(
-        #     paths=['x'],
-        #     not_paths_specs=[final_audio],
-        #     logscale=True,fontsize=16,set_width=1.5,
-        #     draw_boxes=[temp_unlog_boxes],
-        #     box_colors=['#45ff45']*len(boxes),
-        #     box_widths=[2]*len(boxes),
-        #     box_format='xxyy')
+        if config['include_spectrogram']:
+            image = spectrogram_transformed(
+                final_audio,
+                to_pil=True,
+                color_mode=color_mode,
+                log_scale=True,
+                normalise='power_to_PCEN',
+                resize=(640, 640),
+            )
+            image_output_path = f'{save_directory}/artificial_dataset/images/{save_files_path}.jpg'
         
-        image = spectrogram_transformed(
-            final_audio,
-            to_pil=True,
-            color_mode=color_mode,
-            log_scale=True,
-            normalise='power_to_PCEN',
-            resize=(640, 640),
-        )
-        if idx > val_index:
-            image_output_path = f'{save_directory}/artificial_dataset/images/val/{idx}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/val/{idx}.txt'
-        else:
-            image_output_path = f'{save_directory}/artificial_dataset/images/train/{idx}.jpg'
-            txt_output_path = f'{save_directory}/artificial_dataset/labels/train/{idx}.txt'
+            # check directory exists
+            if not os.path.exists(os.path.dirname(image_output_path)):
+                os.makedirs(os.path.dirname(image_output_path))
+            image.save(image_output_path, format='JPEG', quality=95)
+            # Reopen the image to check for errors (slow)
+            # try:
+            #     img = Image.open(image_output_path)
+            #     img.load()  # loading of image data
+            #     img.close()
+            # except (IOError, SyntaxError) as e:
+            #     print(f"Invalid image after reopening: {e}")
+
+        if config['include_boxes']:
+            box_label_output_path = f'{save_directory}/artificial_dataset/box_labels/{save_files_path}.txt'
+
+            # Merge boxes based on IoU
+            merged_boxes, merged_classes = merge_boxes_by_class(boxes, classes, iou_threshold=0.1, ios_threshold=0.4)
+            
+            # use this to remember how to turn off log later
+            # temp_unlog_boxes = []
+            # for box in boxes:
+            #     y1, y2 = map_frequency_to_linear_scale(bg_freq_bins, [box[2], box[3]])
+            #     temp_unlog_boxes.append([box[0], box[1], y1, y2])
+            # plot_spectrogram(
+            #     paths=['x'],
+            #     not_paths_specs=[final_audio],
+            #     logscale=True,fontsize=16,set_width=1.5,
+            #     draw_boxes=[temp_unlog_boxes],
+            #     box_colors=['#45ff45']*len(boxes),
+            #     box_widths=[2]*len(boxes),
+            #     box_format='xxyy')
+            # temp_unlog_boxes = []
+            # for box in merged_boxes:
+            #     y1, y2 = map_frequency_to_linear_scale(bg_freq_bins, [box[2], box[3]])
+            #     temp_unlog_boxes.append([box[0], box[1], y1, y2])
+            # temp_pcen_spec = pcen(final_audio)
+            # plot_spectrogram(
+            #     paths=['x'],
+            #     not_paths_specs=[temp_pcen_spec],color_mode='HSV',to_db=False,
+            #     logscale=True,fontsize=15,set_width=1.3,
+            #     draw_boxes=[temp_unlog_boxes],
+            #     box_colors=['white']*len(merged_boxes),
+            #     box_widths=[2]*len(merged_boxes),
+            #     box_format='xxyy')
+            
+            # make label txt file
+            # check directory exists
+            if not os.path.exists(os.path.dirname(box_label_output_path)):
+                os.makedirs(os.path.dirname(box_label_output_path))
+            with open(box_label_output_path, 'w') as f:
+                for box, species_class in zip(merged_boxes, merged_classes):
+                    x_center = (box[0] + box[1]) / 2 / bg_time_bins
+                    width = (box[1] - box[0]) / bg_time_bins
+
+                    y_center = (box[2] + box[3]) / 2 / bg_freq_bins
+                    y_center = 1 - y_center # vertical flipping for yolo
+                    height = (box[3] - box[2]) / bg_freq_bins
+
+                    if x_center < 0 or x_center > 1 or y_center < 0 or y_center > 1 or width < 0 or width > 1 or height < 0 or height > 1:
+                        print(f"{idx}: Error, box out of bounds!\n\n******\n\n******\n\n*******\n\n")
+
+                    # Write to file in the format [class_id x_center y_center width height]
+                    f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
         
-        if len(image_output_path) > 100:
-            image_output_path = image_output_path[:90]+'.jpg'
-            txt_output_path = txt_output_path[:90]+'.txt'
-        # check directory exists
-        if not os.path.exists(os.path.dirname(image_output_path)):
-            os.makedirs(os.path.dirname(image_output_path))
-        image.save(image_output_path, format='JPEG', quality=95)
-        # Reopen the image to check for errors (slow)
-        # try:
-        #     img = Image.open(image_output_path)
-        #     img.load()  # loading of image data
-        #     img.close()
-        # except (IOError, SyntaxError) as e:
-        #     print(f"Invalid image after reopening: {e}")
-
-        # Merge boxes based on IoU
-        merged_boxes, merged_classes = merge_boxes_by_class(boxes, classes, iou_threshold=0.1, ios_threshold=0.4)
-        
-        # temp_unlog_boxes = []
-        # for box in merged_boxes:
-        #     y1, y2 = map_frequency_to_linear_scale(bg_freq_bins, [box[2], box[3]])
-        #     temp_unlog_boxes.append([box[0], box[1], y1, y2])
-        # temp_pcen_spec = pcen(final_audio)
-        # plot_spectrogram(
-        #     paths=['x'],
-        #     not_paths_specs=[temp_pcen_spec],color_mode='HSV',to_db=False,
-        #     logscale=True,fontsize=15,set_width=1.3,
-        #     draw_boxes=[temp_unlog_boxes],
-        #     box_colors=['white']*len(merged_boxes),
-        #     box_widths=[2]*len(merged_boxes),
-        #     box_format='xxyy')
-        
-        # make label txt file
-        # check directory exists
-        if not os.path.exists(os.path.dirname(txt_output_path)):
-            os.makedirs(os.path.dirname(txt_output_path))
-        with open(txt_output_path, 'w') as f:
-            for box, species_class in zip(merged_boxes, merged_classes):
-                x_center = (box[0] + box[1]) / 2 / bg_time_bins
-                width = (box[1] - box[0]) / bg_time_bins
-
-                y_center = (box[2] + box[3]) / 2 / bg_freq_bins
-                y_center = 1 - y_center # vertical flipping for yolo
-                height = (box[3] - box[2]) / bg_freq_bins
-
-                if x_center < 0 or x_center > 1 or y_center < 0 or y_center > 1 or width < 0 or width > 1 or height < 0 or height > 1:
-                    print(f"{idx}: Error, box out of bounds!\n\n******\n\n******\n\n*******\n\n")
-
-                # Write to file in the format [class_id x_center y_center width height]
-                f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
-        if output_generate_masks:
+        if config['include_masks']:
             # Add images info
             for i in range(n):
                 coco_dataset['images'].append({
@@ -789,8 +803,14 @@ def generate_overlays(
             coco_dataset['annotations'] = coco_annotations
             
             # Save COCO dataset
-            with open(f'{save_directory}/artificial_dataset/annotations.json', 'w') as f:
+            with open(f'{save_directory}/artificial_dataset/mask_annotations.json', 'w') as f:
                 json.dump(coco_dataset, f)
+
+        if config['include_kaytoo']:
+            # save coarse labels as csv
+            coarse_labels_output_path = f'{save_directory}/artificial_dataset/coarse_labels/{save_files_path}.csv'
+            with open(coarse_labels_output_path, 'w') as f:
+                f.write(f'{save_files_path}.wav,{species_class},[]\n')
 
     if(plot):
         plot_labels([0,n], save_directory)
@@ -809,23 +829,28 @@ if config['output']['rainbow_frequency']:
 else:
     color_mode = 'BW'
 
+positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(dataset_path, background_path, positive_paths, negative_paths)
+
+print(f'Generating overlays for {config["output"]["n"]} images')
+
 # generate overlays
-generate_overlays(
-    get_data_paths = [dataset_path, background_path, positive_paths, negative_paths],
-    save_directory = config['paths']['output'],
-    n=config['output']['n'],
-    clear_dataset=config['output']['overwrite_output_path'],
-    sample_rate=48000,
-    final_length_seconds=config['output']['length'],
+# generate_overlays(
+#     config,
+#     get_data_paths = [dataset_path, background_path, positive_paths, negative_paths],
+#     save_directory = config['paths']['output'],
+#     n=config['output']['n'],
+#     clear_dataset=config['output']['overwrite_output_path'],
+#     sample_rate=48000,
+#     final_length_seconds=config['output']['length'],
 
-    output_generate_masks=config['output']['generate_masks'],
+#     output_generate_masks=config['output']['generate_masks'],
 
-    positive_overlay_range=config['output']['positive_overlay_range'],
-    negative_overlay_range=config['output']['negative_overlay_range'],
-    val_ratio=config['output']['val_ratio'],
-    save_wav=config['output']['include_soundfile'],
-    plot=config['plot']['toggle'],
-    color_mode=color_mode,
-    single_class=config['output']['single_class'],
-    repetitions=config['output']['repetitions'],
-    )
+#     positive_overlay_range=config['output']['positive_overlay_range'],
+#     negative_overlay_range=config['output']['negative_overlay_range'],
+#     val_ratio=config['output']['val_ratio'],
+#     save_wav=config['output']['include_soundfile'],
+#     plot=config['plot']['toggle'],
+#     color_mode=color_mode,
+#     single_class=config['output']['single_class'],
+#     repetitions=config['output']['repetitions'],
+#     )

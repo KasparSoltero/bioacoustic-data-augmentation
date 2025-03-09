@@ -1,5 +1,5 @@
 paths:
-  dataset: 'Rectangle/little_owl'
+  dataset: 'example_dataset'
   vocalisations: 'vocalisations'
   noise: 'noise'
   negative: 'negative'
@@ -8,7 +8,6 @@ paths:
 input:
   allowed_files: ['.WAV', '.wav', '.mp3', '.flac', '.m4a']
 
-# output data config
 output:
   overwrite_output_path: True
 
@@ -16,22 +15,19 @@ output:
   val_ratio: 0.8
   single_class: False
   include_soundfile: True #48000 Hz
-  include_spectrogram: False
-  include_boxes: False
-  include_masks: False
+  include_spectrogram: True
+  include_boxes: True
+  include_masks: True
   include_kaytoo: True
 
-  positive_overlay_range: [0,3]
-  # positive_overlay_range: [6,6]
+  positive_overlay_range: [0,5]
   negative_overlay_range: [0,2]
-  # negative_overlay_range: [2,2]
-  repetitions: [1,2] # repetitions occur 50% of the time
-  # repetitions: [1,10]
+  repetitions: [1,10] # repetitions occur 50% of the time
 
-  # todo Logspec
+  # todo Logspec - always true atm
   length: 10 # seconds
   rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
   
 plot:
   toggle: True
-  color_filter: 'dusk' # 'dusk' # 'dusk' or None
+  color_filter: 'dusk' # 'dusk' or None for true color
