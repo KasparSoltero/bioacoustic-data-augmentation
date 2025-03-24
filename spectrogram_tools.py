@@ -620,6 +620,11 @@ def rle_decode(counts, shape):
     return mask.reshape(shape)
 
 # main spectrogram functions
+# def get_device():
+    # try mps first
+    # if torch.backends and torch.back
+
+
 def spec_to_image(spectrogram, image_normalise=0.2):
     # make ipeg image
     spec = np.squeeze(spectrogram.numpy())
@@ -733,19 +738,6 @@ def map_frequency_to_log_scale(original_height, freq_indices):
     
     return log_freq_indices
 
-# def map_frequency_to_linear_scale(original_height, freq_indices):
-#     # Convert frequency indices to linear scale
-#     linear_freq_indices = []
-#     for freq_index in freq_indices:
-#         # Find the relative position in the original log scale
-#         relative_position = freq_index / (original_height - 1 if original_height > 1 else 1)
-        
-#         # Map to the linear scale
-#         linear_position = 10 ** (relative_position * (torch.log10(torch.tensor(10.0)) - 1) + 1)
-#         linear_index = int(torch.round(linear_position * (original_height - 1)))
-#         linear_freq_indices.append(linear_index)
-    
-#     return linear_freq_indices
 def map_frequency_to_linear_scale(original_height, freq_indices):
     # Convert frequency indices from log scale to linear scale
     linear_freq_indices = []
@@ -1067,7 +1059,7 @@ def load_spectrogram(
             print(f'couldn"t load {path}')
             return None
         # print(f'loaded {os.path.basename(path)}, sample rate {sample_rate}')
-        resample = torchaudio.transforms.Resample(sample_rate, resample_rate)
+        resample = torchaudio.transforms.Resample(sample_rate, resample_rate, dtype=torch.float32).to(waveform.device)
         waveform = resample(waveform)
         if waveform.shape[0]>1:
             waveform = torch.mean(waveform, dim=0, keepdim=True) # mono
@@ -1159,7 +1151,7 @@ def transform_waveform(waveform,
         waveform = torch.mean(waveform, dim=0, keepdim=True) # mono
     
     if  not (resample[0]==resample[1]):
-        resample_transform = torchaudio.transforms.Resample(resample[0], resample[1])
+        resample_transform = torchaudio.transforms.Resample(resample[0], resample[1], dtype=torch.float32).to(waveform.device)
         waveform = resample_transform(waveform)
     
     if random_crop_seconds: 

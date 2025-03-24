@@ -4,3 +4,5 @@
 .DS_Store
 __pycache__/
 config.yaml
+classifiers/*
+lightning_logs/*

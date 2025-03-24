@@ -1,37 +1,44 @@
-paths:
-  dataset: 'Rectangle/little_owl'
-  vocalisations: 'vocalisations'
-  noise: 'noise'
-  negative: 'negative'
-  output: 'output'
-
 input:
-  allowed_files: ['.WAV', '.wav', '.mp3', '.flac', '.m4a']
-
-# output data config
+  allowed_files:
+  - .WAV
+  - .wav
+  - .mp3
+  - .flac
+  - .m4a
 output:
-  overwrite_output_path: True
-
-  n: 3
+  highpass_variable: 0
+  include_boxes: false
+  include_kaytoo: true
+  include_masks: false
+  include_soundfile: false
+  include_spectrogram: false
+  length: 10
+  lowpass_variable: 0
+  n: 5000
+  negative_overlay_range:
+  - 0
+  - 3
+  overwrite_output_path: true
+  positive_overlay_range:
+  - 0
+  - 2
+  rainbow_frequency: false
+  repetitions:
+  - 1
+  - 2
+  single_class: true
+  snr_range:
+  - 0.9
+  - 1
   val_ratio: 0.8
-  single_class: False
-  include_soundfile: True #48000 Hz
-  include_spectrogram: False
-  include_boxes: False
-  include_masks: False
-  include_kaytoo: True
-
-  positive_overlay_range: [0,3]
-  # positive_overlay_range: [6,6]
-  negative_overlay_range: [0,2]
-  # negative_overlay_range: [2,2]
-  repetitions: [1,2] # repetitions occur 50% of the time
-  # repetitions: [1,10]
-
-  # todo Logspec
-  length: 10 # seconds
-  rainbow_frequency: True # maybe helpful from https://www.sciencedirect.com/science/article/pii/S1574954121003253
-  
+  concatenate: false
+paths:
+  dataset: /Volumes/Rectangle/little_owl
+  do_train_val_split: false
+  negative: negative
+  noise: noise
+  output: augmented_dataset_output
+  vocalisations: vocalisations
 plot:
-  toggle: True
-  color_filter: 'dusk' # 'dusk' # 'dusk' or None
+  color_filter: dusk
+  toggle: false

@@ -23,6 +23,7 @@ output:
   positive_overlay_range: [0,5]
   negative_overlay_range: [0,2]
   repetitions: [1,10] # repetitions occur 50% of the time
+  snr_range: [0.5,1]
 
   # todo Logspec - always true atm
   length: 10 # seconds

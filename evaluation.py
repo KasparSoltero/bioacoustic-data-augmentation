@@ -1,79 +1,192 @@
-## one-off script for gnerating training tags from the uncropped macaulay library dataset
-
-import os
 import yaml
-import pandas as pd
-from main import read_tags
-with open('config.yaml') as f:
-    config = yaml.safe_load(f)
-dataset_path= os.path.join(config['paths']['dataset'], 'uncropped')
-output_csv_path = os.path.join(config['paths']['dataset'], 'evaluation/evaluation.csv')
+import os
+import itertools
+import copy
+from pathlib import Path
+import sys
+import importlib
+import traceback
 
-# def generate_tags_from_folders():
-#     if os.path.exists(output_csv_path):
-#         print(f'overwriting {output_csv_path}')
-#         os.system(f'rm -rf {output_csv_path}')
-#     to_add = {}
+from main import run_augmentation
+from classifiers.kaytoo_small import main_training_function
 
-#     # print files in path
-#     for path in os.listdir(dataset_path):
-#         # if directory
-#         if os.path.isdir(os.path.join(dataset_path, path)):
-#             print(f'Folder: {path}')
-#             if path=='NZBB':
-#                 # add with species 'korimako' to datatags
-#                 for file in os.listdir(os.path.join(dataset_path, path)):
-#                     to_add[file] = {'species': 'korimako'}
-#             elif path=='TUI':
-#                 # add with species 'tui'
-#                 for file in os.listdir(os.path.join(dataset_path, path)):
-#                     to_add[file] = {'species': 'tui'}
+# Define parameter sweep configuration
+parameter_sweep = {
+    'mode': 'individual',  # 'individual' or 'combination'
+    'concatenate': True,
+    'parameters': {
+        # Parameters to vary in format 'section.parameter': [values]
+        # 'output.positive_overlay_range': [[0, 1], [0, 2], [0, 3]],
+        # 'output.negative_overlay_range': [[0, 0], [0, 1], [0, 2]],
+        # 'output.snr_range': [[0.3, 1], [0.5, 1], [0.7, 1], [0.9, 1]],
+        # 'output.repetitions': [[1, 1], [1, 2], [1, 3]],
+        'output.n': [6000,7000,8000,9000,10000]
 
-#     # print
-#     print('Files to add:')
-#     for file, tags in to_add.items():
-#         print(f'{file} - {tags}')
+    },
+    # Base directory for outputs
+    'project_dir': 'classifiers',
+    'results_dir': 'evaluation_results'
+}
+
+# Create results directory
+results_dir = Path(parameter_sweep['project_dir']) / parameter_sweep['results_dir']
+results_dir.mkdir(parents=True, exist_ok=True)
+
+# Function to update nested dictionary values using dot notation
+def update_nested_dict(d, key, value):
+    keys = key.split('.')
+    current = d
+    for k in keys[:-1]:
+        if k not in current:
+            current[k] = {}
+        current = current[k]
+    current[keys[-1]] = value
+    return d
+
+# Safely import the augmentation function
+def get_augmentation_function():
+    # We'll import the function dynamically to avoid issues
+    # with code executing during import
+    import sys
+    sys.path.insert(0, os.path.abspath('.'))
+    from main import run_augmentation
+    return run_augmentation
+
+# Safely import the training function
+def get_training_function():
+    # Similarly import the training function dynamically
+    import sys
+    sys.path.insert(0, os.path.abspath('./classifiers'))
+    from classifiers.kaytoo_small import main_training_function
+    return main_training_function
+
+# Function to run a single experiment pipeline
+def run_experiment(experiment_id, config, use_case, parameters_desc):
+    """Run a single experiment with the given parameters"""
+    print(f"\n=== Experiment {experiment_id}: {parameters_desc} ===")
+
+    # Save configs for reference
+    augmentation_config_path = f'{results_dir}/augmentation_config_{experiment_id}.yaml'
+    training_config_path = f'{results_dir}/training_config_{experiment_id}.yaml'
     
-#     # write to csv
-#     with open(output_csv_path, 'w') as f:
-#         f.write('filename,species\n')
-#         for file, tags in to_add.items():
-#             f.write(f'{file},{tags["species"]}\n')
-
-
-# def fix_tags():
-#     # replace m4a with wav
-#     actual_tags = os.path.join(dataset_path, 'tags.csv')
-#     datatags = pd.read_csv(actual_tags)
-#     datatags = datatags.set_index('filename').T.to_dict('dict')
-
-#     # replace m4a with wav
-#     to_remove = []
-#     to_add = {}
-#     for file, tags in datatags.items():
-#         if file.split('.')[-1] == 'm4a':
-#             to_remove.append(file)
-#             to_add[file.split('.')[0] + '.wav'] = tags
-#     for file in to_remove:
-#         del datatags[file]
-#     datatags.update(to_add)
-#     with open(output_csv_path, 'w') as f:
-#         f.write('filename,species\n')
-#         for file, tags in datatags.items():
-#             f.write(f'{file},{tags["species"]}\n')
-
-# def check_tags():
-#     datatags = read_tags(output_csv_path)
-#     for file, tags in datatags.items():
-#         if 'species' not in tags:
-#             print(f'No species tag for {file}')
-#         elif tags['species'] not in ['korimako', 'tui']:
-#             print(f'Invalid species tag for {file}: {tags["species"]}')
-#     for file in os.listdir(dataset_path):
-#         if (file.split('.')[-1] not in ['wav', 'mp3']):
-#             print(f'Invalid file extension for {file}')
-#         if file.split('.')[0] not in datatags:
-#             print(f'No tag for {file}')
-#     print(f'Checked {len(datatags)} tags')
+    with open(augmentation_config_path, 'w') as f:
+        yaml.dump(config, f)
     
-# print('starting')
+    # Update use_case with experiment ID
+    use_case['experiment'] = experiment_id
+    use_case['project_root'] = parameter_sweep['project_dir']
+    use_case['experiment_dir'] = parameter_sweep['results_dir']
+    with open(training_config_path, 'w') as f:
+        yaml.dump(use_case, f)
+    
+    # Step 1: Run data augmentation in a controlled way
+    try:
+        print(f"Generating augmented dataset...")
+        augmentation_fn = get_augmentation_function()
+        augmentation_fn(config)
+        print(f"Data augmentation completed successfully.")
+    except Exception as e:
+        print(f"Error during data augmentation: {str(e)}")
+        traceback.print_exc()
+        return False
+    
+    # Step 2: Run model training in a controlled way
+    try:
+        print(f"Running model training for experiment {experiment_id}...")
+        training_fn = get_training_function()
+        metrics = training_fn(use_case)
+        
+        # Save metrics
+        with open(f'{results_dir}/metrics_{experiment_id}.yaml', 'w') as f:
+            yaml.dump(metrics, f)
+        
+        print(f"Training completed successfully.")
+    except Exception as e:
+        print(f"Error during training: {str(e)}")
+        traceback.print_exc()
+        return False
+    
+    # Save experiment parameters
+    with open(f'{results_dir}/experiment_{experiment_id}_parameters.yaml', 'w') as f:
+        yaml.dump({
+            'parameters': parameters_desc, 
+            'experiment_id': experiment_id,
+            'status': 'completed'
+        }, f)
+    
+    print(f"=== Completed Experiment {experiment_id} ===\n")
+    return True
+
+# Main execution
+def run_parameter_sweep():
+    # Load the default configs
+    with open('config.yaml', 'r') as f:
+        default_config = yaml.safe_load(f)
+
+    with open('classifiers/use_case.yaml', 'r') as f:
+        default_use_case = yaml.safe_load(f)
+
+    experiment_id = 10
+    # check if theres a previous experiment
+
+    completed_experiments = []
+    failed_experiments = []
+
+    if parameter_sweep['mode'] == 'individual':
+        # Option 1: Run one session for each parameter value, keeping others default
+        for param_key, param_values in parameter_sweep['parameters'].items():
+            for value in param_values:
+                config = copy.deepcopy(default_config)
+                if parameter_sweep['concatenate']:
+                    config['output']['concatenate'] = True
+                use_case = copy.deepcopy(default_use_case)
+                update_nested_dict(config, param_key, value)
+                
+                parameters_desc = {param_key: value}
+                success = run_experiment(experiment_id, config, use_case, parameters_desc)
+                
+                if success:
+                    completed_experiments.append(experiment_id)
+                else:
+                    failed_experiments.append(experiment_id)
+                
+                experiment_id += 1
+                
+    elif parameter_sweep['mode'] == 'combination':
+        # Option 2: Run one session for each combination of parameters
+        param_keys = list(parameter_sweep['parameters'].keys())
+        param_values = list(parameter_sweep['parameters'].values())
+        
+        for combination in itertools.product(*param_values):
+            config = copy.deepcopy(default_config)
+            if parameter_sweep['concatenate']:
+                config['output']['concatenate'] = True
+            use_case = copy.deepcopy(default_use_case)
+            parameters_desc = {}
+            
+            for i, key in enumerate(param_keys):
+                update_nested_dict(config, key, combination[i])
+                parameters_desc[key] = combination[i]
+            
+            success = run_experiment(experiment_id, config, use_case, parameters_desc)
+            
+            if success:
+                completed_experiments.append(experiment_id)
+            else:
+                failed_experiments.append(experiment_id)
+            
+            experiment_id += 1
+    else:
+        print("Invalid mode. Please choose 'individual' or 'combination'")
+
+    # Summarize results
+    print(f"\n=== Parameter Sweep Summary ===")
+    print(f"Total experiments: {experiment_id-1}")
+    print(f"Completed experiments: {len(completed_experiments)}")
+    print(f"Failed experiments: {len(failed_experiments)}")
+    
+    if failed_experiments:
+        print(f"Failed experiment IDs: {failed_experiments}")
+
+if __name__ == "__main__":
+    run_parameter_sweep()
