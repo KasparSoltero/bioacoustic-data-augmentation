@@ -553,10 +553,10 @@ def generate_masks(overlay_waveform, image_id, category_id, last_box, threshold_
     ]
     
     annotation = {
-        'segmentation': {
+        'segmentation': [{
             'counts': rle,
             'size': list(mask.shape)  # [freq, time]
-        },
+        }],
         'area': float(mask.sum()),
         'iscrowd': 0,
         'image_id': image_id,

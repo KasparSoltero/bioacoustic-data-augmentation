@@ -1,3 +1,5 @@
+# this file re-plots training metrics from a (rurunohinohi) model and also finds the best model based on a target metric
+
 import os
 import yaml
 import matplotlib.pyplot as plt
@@ -98,7 +100,7 @@ def find_best_models(all_metrics, metric_name):
     return best_per_model, all_values
 
 # Plot model 14's metrics
-plot_model_metrics(14)
+# plot_model_metrics(14)
 
 # Find and print the best models for the target metric
 best_per_model, sorted_models = find_best_models(all_metrics, target_metric)

@@ -1,0 +1,5 @@
+experiment: 2000
+project_root: "/Users/kaspar/Documents/bioacoustic-data-augmentation/classifiers/"
+num_cores: 8
+run_training: true
+epochs: 20

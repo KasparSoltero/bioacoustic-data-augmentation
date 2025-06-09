@@ -1,8 +1,11 @@
 /.venv
-/dataset
-/output
 .DS_Store
 __pycache__/
 config.yaml
-classifiers/*
+/output
+/dataset
+augmented_dataset_output/*
+classifiers/augmented_dataset/*
+classifiers/evaluation_results/*
 lightning_logs/*
+extra_log/*
