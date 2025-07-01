@@ -7,7 +7,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.colors import hsv_to_rgb
+from matplotlib.colors import hsv_to_rgb, ListedColormap
 from PIL import Image
 import csv
 import chardet
@@ -18,7 +18,7 @@ from scipy.spatial import ConvexHull
 import matplotlib.patches as patches
 
 from spectrogram_tools import spectrogram_transformed, spec_to_audio, crop_overlay_waveform, load_waveform, transform_waveform, map_frequency_to_log_scale, map_frequency_to_linear_scale, merge_boxes_by_class, generate_masks, rle_decode, rle_encode, log_scale_spectrogram # Added rle_encode, log_scale_spectrogram
-from classifiers.colors import custom_color_maps, hex_to_rgb
+from classifiers.colors import custom_color_maps, hex_to_rgb, generate_rainbow_colors
 
 def generate_yolo_segment_data_from_binary_mask(binary_mask, class_id, box_in_full_spec_bins, full_spec_dims_bins, simplify_tolerance=10, морph_footprint_size=1, min_contour_area_pixels=100): # Increased min_contour_area_pixels default
     """
@@ -125,7 +125,16 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
             for row in reader:
                 if len(row) == 2:
                     species_value_map[int(row[0])] = row[1]
-
+    label_colors = generate_rainbow_colors(len(species_value_map)+1)[:-1]
+    
+    # First color is for background (value 0), make it transparent (alpha=0)
+    hrnet_cmap_colors = [(0, 0, 0, 0)] 
+    for hex_color in label_colors:
+        rgb = hex_to_rgb(hex_color)
+        # Normalize RGB to 0-1 and add alpha=1 for opaque class colors
+        rgba_color = tuple(c / 255.0 for c in rgb) + (1.0,)
+        hrnet_cmap_colors.append(rgba_color)
+    hrnet_custom_cmap = ListedColormap(hrnet_cmap_colors)
 
     # Calculate the number of rows and columns for subplots
     if idx[1] == -1: # Default to plotting first 9 images if end index is -1
@@ -141,7 +150,7 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
     base_rows = (num_images_to_plot + cols - 1) // cols 
 
     actual_figure_rows = base_rows
-    masks_enabled = config['output']['include_yolo_masks'] or config['output']['include_coco_masks']
+    masks_enabled = config['output']['include_yolo_masks'] or config['output']['include_coco_masks'] or config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']
     if masks_enabled:
         actual_figure_rows = base_rows * 2 # Double rows if masks are to be plotted underneath
 
@@ -166,7 +175,6 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
     # `squeeze=False` ensures axes is always 2D, even for 1 row/col
     fig.canvas.manager.set_window_title('') 
     fig.suptitle(f'{save_directory}/artificial_dataset/images (Displaying {num_images_to_plot} images)', fontsize=12)
-
 
     image_files = [f for f in os.listdir(f'{save_directory}/artificial_dataset/images') if not f.startswith('.')]
     # Sort files to ensure consistent plotting order, especially if OS doesn't guarantee it
@@ -237,11 +245,13 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                     x_min_time = (x_center * 10) - (box_time_width / 2)
                     y_min_freq = (y_center * 24000) - (box_freq_height / 2) # y_center is from top
 
+                    labelcolor = label_colors[int(class_id)]
+                    labeltext = species_value_map.get(int(class_id))
+
                     rect = plt.Rectangle((x_min_time, y_min_freq), box_time_width, box_freq_height,
-                                        linewidth=1, edgecolor='#FFFFFF', facecolor='none', alpha=0.8)
+                                        linewidth=1, edgecolor=labelcolor, facecolor='none', alpha=0.8)
                     ax.add_patch(rect)
-                    if species_value_map and config['plot']['show_labels']:
-                        labeltext = species_value_map.get(int(class_id), f"ID:{int(class_id)}")
+                    if config['plot']['show_labels']:
                         if ' ' in labeltext and len(labeltext) > 10: # Basic wrap
                             labeltext = labeltext.split(' ')[0] + '\n' + ' '.join(labeltext.split(' ')[1:])
                         ax.text(x_min_time, y_min_freq + box_freq_height+10, labeltext, fontsize=10, color='#eeeeee',
@@ -285,8 +295,7 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
             thisax.set_xticks([])
             thisax.set_yticks([])
             # Display a light version of the original image as background for masks
-            thisax.imshow(image_array, aspect='auto', origin='upper', alpha=1, cmap=cmap_to_use)
-
+            thisax.imshow(image_array, origin='upper', alpha=0.9, cmap=cmap_to_use)
 
             if config['output']['include_yolo_masks']:
                 yolo_label_filename = os.path.splitext(image_path_basename)[0] + ".txt"
@@ -322,11 +331,11 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                         thisax.set_title(f'YOLO Masks ({len(polygons_to_draw)})', fontsize=8)
                         for poly_idx, poly_data in enumerate(polygons_to_draw):
                             # Use class_id for color if a map exists, otherwise cycle
-                            color_hex = custom_color_maps['rotary'][poly_data['class_id'] % len(custom_color_maps['rotary'])]
+                            maskcolor = label_colors[poly_data['class_id']]
                             # color_hex = custom_color_maps['rotary'][poly_idx % len(custom_color_maps['rotary'])] # Color by instance
                             
                             polygon_patch = patches.Polygon(poly_data['points'], closed=True, fill=True, 
-                                                            edgecolor='white', facecolor=tuple(c/255.0 for c in hex_to_rgb(color_hex)) + (0.6,),# Add alpha to facecolor
+                                                            edgecolor='white', facecolor=tuple(c/255.0 for c in hex_to_rgb(maskcolor)) + (0.6,),# Add alpha to facecolor
                                                             linewidth=1)
                             thisax.add_patch(polygon_patch)
                     else:
@@ -342,7 +351,7 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                 if os.path.exists(coco_path):
                     with open(coco_path, 'r') as f:
                         coco_data = json.load(f)
-                    
+
                     image_name_stem_for_coco = os.path.splitext(image_path_basename)[0]
                     image_id_coco = None
                     for img_coco_dict in coco_data['images']:
@@ -358,10 +367,8 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                     # if image_id_coco is None and image_name_stem_for_coco.isdigit(): # Try direct ID if stem is numeric
                     #     image_id_coco = int(image_name_stem_for_coco)
 
-
                     if image_id_coco is not None:
                         image_annotations = [ann for ann in coco_data['annotations'] if ann['image_id'] == image_id_coco]
-                        
                         if image_annotations:
                             thisax.set_title(f'COCO Masks ({len(image_annotations)})', fontsize=8)
                             # Create a composite mask overlay image
@@ -369,10 +376,16 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                             # We will draw patches on top of this.
 
                             for j, ann in enumerate(image_annotations):
-                                if 'counts' not in ann['segmentation'] or 'size' not in ann['segmentation']:
+                                if not isinstance(ann.get('segmentation'), list) or not ann['segmentation']:
                                     continue
-                                mask_counts = ann['segmentation']['counts']
-                                mask_size = ann['segmentation']['size'] # [orig_freq_bins, orig_time_bins]
+
+                                rle_data = ann['segmentation'][0]
+
+                                if 'counts' not in rle_data or 'size' not in rle_data:
+                                    continue
+
+                                mask_counts = rle_data['counts'] 
+                                mask_size = rle_data['size'] 
                                 decoded_mask = rle_decode(mask_counts, mask_size) # 1D array
                                 decoded_mask_2d = decoded_mask.reshape(mask_size) # Reshape to 2D [freq, time]
 
@@ -385,12 +398,12 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                                 
                                 # here
                                 contours_coco = find_contours(mask_resized_np, 128) # Find contours on the resized mask
-                                color_coco_hex = custom_color_maps['rotary'][j % len(custom_color_maps['rotary'])]
+                                maskcolor_hex = label_colors[ann['category_id']]
                                 for contour in contours_coco:
                                     # Contour points are (row, col) which is (y, x)
                                     # Patches.Polygon expects (x, y)
                                     polygon_coco_patch = patches.Polygon(contour[:, [1, 0]], closed=True, fill=True,
-                                                                        edgecolor='white', facecolor=tuple(c/255.0 for c in hex_to_rgb(color_coco_hex)) + (0.6,), # Add alpha to facecolor
+                                                                        edgecolor='white', facecolor=tuple(c/255.0 for c in hex_to_rgb(maskcolor_hex)) + (0.6,), # Add alpha to facecolor
                                                                         linewidth=1)
                                     thisax.add_patch(polygon_coco_patch)
                         else: # No annotations for this image_id
@@ -402,9 +415,78 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                 else: # COCO json file not found
                     thisax.text(0.5, 0.5, 'COCO .json not found', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
                     thisax.set_title(f'COCO Masks (no json)', fontsize=8)
+            
+            elif config['output']['include_hrnet_masks']:
+                # Determine the split and construct the HRNet mask path
+                is_val_image = os.path.dirname(image_path_basename) == 'val'
+                hrnet_split_folder = 'val' if is_val_image else 'train'
+                image_index_str = os.path.splitext(os.path.basename(image_path_basename))[0]
+
+                try:
+                    hrnet_mask_basename = f"spectrogram_{int(image_index_str):04d}.png"
+                    if config['paths']['hrnet_remote_dir']:
+                        hrnet_mask_path = f"{config['paths']['hrnet_remote_dir']}/bioacoustics/labels/{hrnet_split_folder}/{hrnet_mask_basename}"
+                    else:
+                        hrnet_mask_path = f"{save_directory}/artificial_dataset/hrnet_masks/bioacoustics/labels/{hrnet_split_folder}/{hrnet_mask_basename}"
+                    
+                    if os.path.exists(hrnet_mask_path):
+                        mask_image = Image.open(hrnet_mask_path)
+                        mask_array = np.array(mask_image)
+                        # Use the custom colormap. The normalization (vmin, vmax) ensures that
+                        # pixel values 0, 1, 2... in the mask correctly map to the
+                        # colors in our custom colormap.
+                        thisax.imshow(mask_array, 
+                                    origin='upper',
+                                    aspect='auto',
+                                    cmap=hrnet_custom_cmap, 
+                                    interpolation='none', 
+                                    vmin=0, 
+                                    vmax=len(hrnet_cmap_colors) - 1)
+                        thisax.set_title(f'HRNet Mask ({np.max(mask_array) if mask_array.size > 0 else 0} classes)', fontsize=8)
+                    else:
+                        thisax.text(0.5, 0.5, 'HRNet Mask Not Found', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
+                        thisax.set_title('HRNet Mask (no file)', fontsize=8)
+
+                except (ValueError, FileNotFoundError) as e:
+                    thisax.text(0.5, 0.5, f'Error loading HRNet mask:\n{e}', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
+                    thisax.set_title('HRNet Mask (error)', fontsize=8)
+            
+            elif config['output']['include_unetplusplus_masks']:
+                print(f'plotting Unet++ masks for {image_path_basename}')
+                # Determine the split and construct the Unet++ mask path
+                # image_path_basename might contain 'train/' or 'val/'
+                split_folder = 'train'
+                if os.path.dirname(image_path_basename) == 'val':
+                    split_folder = 'val'
+                
+                image_index_str = os.path.splitext(os.path.basename(image_path_basename))[0]
+                
+                try:
+                    unet_mask_path = f"{save_directory}/artificial_dataset/unetplusplus_masks/{split_folder}/masks/{image_index_str}.png"
+
+                    if os.path.exists(unet_mask_path):
+                        mask_image = Image.open(unet_mask_path)
+                        mask_array = np.array(mask_image)
+                        
+                        # The existing hrnet_custom_cmap will work perfectly here
+                        thisax.imshow(mask_array, 
+                                    origin='upper',
+                                    aspect='auto',
+                                    cmap=hrnet_custom_cmap, 
+                                    interpolation='none', 
+                                    vmin=0, 
+                                    vmax=len(hrnet_cmap_colors) - 1)
+                        thisax.set_title(f'Unet++ Mask ({np.max(mask_array) if mask_array.size > 0 else 0} instances)', fontsize=8)
+                    else:
+                        thisax.text(0.5, 0.5, 'Unet++ Mask Not Found', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
+                        thisax.set_title('Unet++ Mask (no file)', fontsize=8)
+
+                except (ValueError, FileNotFoundError) as e:
+                    thisax.text(0.5, 0.5, f'Error loading Unet++ mask:\n{e}', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
+                    thisax.set_title('Unet++ Mask (error)', fontsize=8)
+            
             else: # No mask type enabled, or problem with axes
                 thisax.text(0.5, 0.5, 'Masks not configured', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
-
 
     plt.tight_layout(rect=[0, 0, 1, 0.97]) # Adjust rect to make space for suptitle
     plt.show()
@@ -719,7 +801,7 @@ def generate_overlays(
         # songs can be cropped over edges, minimum 1 second present
         # images are normalised to 0-100 dB, then 0-1 to 255
         # 80:20 split train and val
-        # 640x640 images
+        # jpeg 640x640 images
     # TODO:
         # training data spacings for long ones, add distance/spacing random additions in loop
 
@@ -738,10 +820,18 @@ def generate_overlays(
         os.system(f'rm -rf {save_directory}/artificial_dataset/box_labels/*')
         os.system(f'rm -rf {save_directory}/artificial_dataset/yolo_labels/*') # Clear YOLO labels
         os.system(f'rm -rf {save_directory}/artificial_dataset/dataset.yaml') # Clear YOLO dataset yaml
+        os.system(f'rm -rf {save_directory}/artificial_dataset/hrnet_masks/*')
         os.system(f'rm -rf {save_directory}/artificial_dataset/mask_annotations.json') # Clear COCO annotations
+        os.system(f'rm -rf {save_directory}/artificial_dataset/unetplusplus_masks/*') # Clear Unet++ masks
         os.system(f'rm -rf {save_directory}/species_value_map.csv')
         os.system(f'rm -rf classifiers/augmented_dataset/sound_files/*')
         os.system(f'rm -rf classifiers/augmented_dataset/labels.csv')
+        if config['paths']['hrnet_remote_dir'] and config['output']['include_hrnet_masks']:
+            os.system(f'rm -rf {config["paths"]["hrnet_remote_dir"]}/bioacoustics/images/train/*')
+            os.system(f'rm -rf {config["paths"]["hrnet_remote_dir"]}/bioacoustics/images/val/*')
+            os.system(f'rm -rf {config["paths"]["hrnet_remote_dir"]}/bioacoustics/labels/train/*')
+            os.system(f'rm -rf {config["paths"]["hrnet_remote_dir"]}/bioacoustics/labels/val/*')
+            os.system(f'rm -rf {config["paths"]["hrnet_remote_dir"]}/list/bioacoustics/*')
 
     data_root, background_path, positive_paths, negative_paths = get_data_paths
     if data_root is None:
@@ -752,38 +842,53 @@ def generate_overlays(
         negative_paths = ['anthrophony', 'geophony']
     positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags = load_input_dataset(data_root, background_path, positive_paths, negative_paths, config)
 
-    # load config
-    # generate species value map
-    species_value_map = {}
-    yolo_data_for_files = {}
-    coco_annotations = []
+    # load config, populated per image
+    species_value_map = {} #used for dataset.yaml
+    val_index = int(n*val_ratio) # validation
 
+    yolo_data_for_files = {} 
     if config['output']['include_yolo_masks']:
         print("YOLO mask output enabled.")
-        # species_value_map will be populated and used for dataset.yaml
-        # yolo_data_for_files = {} # Already initialized above
-    elif config['output']['include_coco_masks']:
+    
+    coco_annotations = []
+    if config['output']['include_coco_masks']:
         print("COCO mask output enabled.")
         coco_dataset = {
             'images': [],
             'annotations': [],
             'categories': []
         }
-    # No specific init for yolo_data_for_files here, it's populated per image.
-        
+    
+    hrnet_train_list = []
+    hrnet_val_list = []
+    if config['output']['include_hrnet_masks']:
+        print("HRNet mask output enabled. Train/Val split will be enforced.")
+        # Create the required directory structure for HRNet
+        if config['paths']['hrnet_remote_dir']:
+            base_hrnet_path = config['paths']['hrnet_remote_dir']
+        else:
+            base_hrnet_path = os.path.join(save_directory, 'artificial_dataset', 'hrnet_masks')
+        os.makedirs(os.path.join(base_hrnet_path, 'bioacoustics', 'images', 'train'), exist_ok=True)
+        os.makedirs(os.path.join(base_hrnet_path, 'bioacoustics', 'images', 'val'), exist_ok=True)
+        os.makedirs(os.path.join(base_hrnet_path, 'bioacoustics', 'labels', 'train'), exist_ok=True)
+        os.makedirs(os.path.join(base_hrnet_path, 'bioacoustics', 'labels', 'val'), exist_ok=True)
+        os.makedirs(os.path.join(base_hrnet_path, 'list', 'bioacoustics'), exist_ok=True)
+    if config['output']['include_unetplusplus_masks']:
+        print("Unet++ mask output enabled. Train/Val split will be enforced.")
+        # Create the required directory structure for Unet++
+        os.makedirs(os.path.join(save_directory, 'artificial_dataset', 'unetplusplus_masks', 'train', 'masks'), exist_ok=True)
+        os.makedirs(os.path.join(save_directory, 'artificial_dataset', 'unetplusplus_masks', 'val', 'masks'), exist_ok=True)
+
     if config['output']['include_kaytoo']:
-        # Initialize the file with headers ONCE before the loop
         labels_path = f'classifiers/augmented_dataset/labels.csv'
         if not os.path.exists(labels_path):
             os.makedirs(os.path.dirname(labels_path), exist_ok=True)
             with open(labels_path, 'w') as f:
                 f.write('filename,primary_label\n')
 
-    val_index = int(n*val_ratio) # validation
-
     # main loop to create and overlay audio
     for idx_offset in range(n):
-        idx = start_idx + idx_offset  # Use adjusted index
+        idx = start_idx + idx_offset  # Use adjusted index (for concatenation mode)
         if idx == n:
             break
         # label = str(idx) # image label
@@ -865,6 +970,7 @@ def generate_overlays(
         # initialise label arrays
         boxes = []
         classes = []
+        hrnet_components_for_image = []
         n_positive_overlays = random.randint(positive_overlay_range[0], positive_overlay_range[1])
         print(f'\n{idx}:    creating new image with {n_positive_overlays} positive overlays, bg={os.path.basename(bg_noise_path)}')
         succuessful_positive_overlays = 0
@@ -880,18 +986,15 @@ def generate_overlays(
                 positive_segment_path = specify_positive
             else: 
                 positive_segment_path = random.choice(positive_segment_paths)
-                    
-            # check if 'species' is 'chorus' (regardless of single_class because this determines how things are placed in the 10s image)
-            # if positive_datatags[os.path.basename(positive_segment_path)[:-4]]['species'] == 'chorus':
-                # continue # #TODO fix skip chorus
-                # if classes.count(1) > 0:
-                    # continue # only one chorus per image
-                # species_class=1
-            # else:
-                # species_class=0
-            species_class = positive_datatags[os.path.basename(positive_segment_path)[:-4]].get('species', None)
-            if not species_class:
-                species_class = 'unknown'
+
+            if config['output']['instance_class']:
+                species_class = 'instance_' + str(succuessful_positive_overlays)
+            elif config['output']['single_class']:
+                species_class = 'single_class'
+            else:
+                species_class = positive_datatags[os.path.basename(positive_segment_path)[:-4]].get('species', None)
+                if not species_class:
+                    species_class = 'unknown'
 
             positive_waveform, pos_sr = load_waveform(positive_segment_path)
             positive_waveform = transform_waveform(positive_waveform, resample=[pos_sr,sample_rate])
@@ -1115,6 +1218,7 @@ def generate_overlays(
                     last_box=boxes[-1], # This is the box of the overlay in full spectrogram coords
                     threshold_db=config['output'].get('mask_threshold_db', 10),
                     log_scale=config['output'].get('log_scale_masks', True),
+                    freq_bounds=(freq_bins_cutoff_bottom, freq_bins_cutoff_top),
                     debug=False
                 )
                 coco_annotations.append(mask_annotation)
@@ -1154,6 +1258,25 @@ def generate_overlays(
                     yolo_data_for_files[idx] = []
                 yolo_data_for_files[idx].extend(yolo_strings_for_this_overlay)
 
+            if config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']:
+                # Generate a binary mask for this specific overlay waveform
+                overlay_spec_for_mask = transform_waveform(overlay, to_spec='power')
+                # set outside bounds to 0
+                overlay_spec_for_mask[:, :freq_bins_cutoff_bottom, :] = 0
+                overlay_spec_for_mask[:, freq_bins_cutoff_top:, :] = 0
+                if config['output'].get('log_scale_masks', True):
+                    overlay_spec_for_mask = log_scale_spectrogram(overlay_spec_for_mask)
+                
+                spec_db_for_mask = 10 * torch.log10(overlay_spec_for_mask + 1e-10)
+                binary_mask_overlay = (spec_db_for_mask > config['output'].get('mask_threshold_db', 10)).numpy().astype(np.uint8)
+                binary_mask_overlay = binary_mask_overlay[0] # remove batch dim
+
+                # Store the full-resolution binary mask and its class ID
+                hrnet_components_for_image.append({
+                    "mask": binary_mask_overlay,
+                    "class_id": classes[-1] 
+                })
+
             # potentially repeat song
             if repetitions:
                 if random.uniform(0,1)>0.5:
@@ -1183,6 +1306,7 @@ def generate_overlays(
                                     last_box=boxes[-1],
                                     threshold_db=config['output'].get('mask_threshold_db', 10),
                                     log_scale=config['output'].get('log_scale_masks', True),
+                                    freq_bounds=(freq_bins_cutoff_bottom, freq_bins_cutoff_top),
                                     debug=False
                                 )
                                 coco_annotations.append(mask_annotation)
@@ -1211,6 +1335,24 @@ def generate_overlays(
                                 if idx not in yolo_data_for_files:
                                     yolo_data_for_files[idx] = []
                                 yolo_data_for_files[idx].extend(yolo_strings_for_this_overlay_rep)
+
+                            if config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']:
+                                overlay_spec_for_mask_rep = transform_waveform(overlay, to_spec='power')
+                                # set outside bounds to 0
+                                overlay_spec_for_mask_rep[:, :freq_bins_cutoff_bottom, :] = 0
+                                overlay_spec_for_mask_rep[:, freq_bins_cutoff_top:, :] = 0
+                                if config['output'].get('log_scale_masks', True):
+                                    overlay_spec_for_mask_rep = log_scale_spectrogram(overlay_spec_for_mask_rep)
+                                
+                                spec_db_for_mask_rep = 10 * torch.log10(overlay_spec_for_mask_rep + 1e-10)
+                                binary_mask_overlay_rep = (spec_db_for_mask_rep > config['output'].get('mask_threshold_db', 10)).numpy().astype(np.uint8)
+                                binary_mask_overlay_rep = binary_mask_overlay_rep[0]
+
+                                hrnet_components_for_image.append({
+                                    "mask": binary_mask_overlay_rep,
+                                    "class_id": classes[-1]
+                                })
+
                         else:
                             break
             
@@ -1274,6 +1416,99 @@ def generate_overlays(
             #     img.close()
             # except (IOError, SyntaxError) as e:
             #     print(f"Invalid image after reopening: {e}")
+
+            if config['output']['include_hrnet_masks'] and hrnet_components_for_image:
+                # Determine train/val split for HRNet (always active for this format)
+                hrnet_split = 'train'
+                if idx_offset > val_index:
+                    hrnet_split = 'val'
+                
+                # Define paths for HRNet files
+                hrnet_basename = f"spectrogram_{idx:04d}"
+                if config['paths']['hrnet_remote_dir']:
+                    hrnet_save_base = f"{config['paths']['hrnet_remote_dir']}"
+                else:
+                    hrnet_save_base = f"{save_directory}/artificial_dataset/hrnet_masks/"
+                hrnet_image_path = f"{hrnet_save_base}/bioacoustics/images/{hrnet_split}/{hrnet_basename}.png"
+                hrnet_label_path = f"{hrnet_save_base}/bioacoustics/labels/{hrnet_split}/{hrnet_basename}.png"
+                
+                # Save the main spectrogram image as PNG for HRNet
+                image.save(hrnet_image_path, format='PNG')
+                
+                # Create the composite mask image
+                img_width, img_height = image.size
+                composite_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+
+                for component in hrnet_components_for_image:
+                    full_res_mask = component['mask']
+                    class_id = component['class_id']
+                    
+                    # Resize the full-resolution binary mask to the final image dimensions
+                    mask_pil_resized = Image.fromarray(full_res_mask).resize(
+                        (img_width, img_height), Image.NEAREST
+                    )
+                    mask_np_resized = np.array(mask_pil_resized)
+                    
+                    # Add to the composite mask. HRNet expects class 1, 2, ... (0 is background)
+                    # Your class IDs start at 0, so we add 1.
+                    composite_mask[mask_np_resized > 0] = class_id + 1
+
+                # Flip the mask vertically before saving so its orientation
+                # matches the saved visual spectrogram image.
+                composite_mask_flipped = np.flipud(composite_mask)
+                # Save the correctly oriented composite mask
+                Image.fromarray(composite_mask_flipped).save(hrnet_label_path)
+                
+                # Prepare the line for the .lst file
+                lst_line = (f"bioacoustics/images/{hrnet_split}/{hrnet_basename}.png "
+                            f"bioacoustics/labels/{hrnet_split}/{hrnet_basename}.png")
+                
+                if hrnet_split == 'train':
+                    hrnet_train_list.append(lst_line)
+                else:
+                    hrnet_val_list.append(lst_line)
+            
+            if config['output']['include_unetplusplus_masks'] and hrnet_components_for_image:
+                # Determine train/val split (mirrors HRNet and YOLO logic)
+                split = 'train'
+                if idx_offset > val_index:
+                    split = 'val'
+
+                # Define paths for the Unet++ structure
+                unet_base_path = f"{save_directory}/artificial_dataset/unetplusplus_masks"
+                unet_image_path = f"{unet_base_path}/{split}/images/{idx}.png"
+                unet_mask_path = f"{unet_base_path}/{split}/masks/{idx}.png"
+
+                # Create directories
+                os.makedirs(os.path.dirname(unet_image_path), exist_ok=True)
+                os.makedirs(os.path.dirname(unet_mask_path), exist_ok=True)
+
+                # Save the main spectrogram image as PNG
+                image.save(unet_image_path, format='PNG')
+                
+                # Create the composite instance mask (this logic is copied from HRNet)
+                img_width, img_height = image.size
+                composite_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+
+                for component in hrnet_components_for_image:
+                    full_res_mask = component['mask']
+                    class_id = component['class_id']
+                    
+                    # Resize the full-resolution binary mask
+                    mask_pil_resized = Image.fromarray(full_res_mask).resize(
+                        (img_width, img_height), Image.NEAREST
+                    )
+                    mask_np_resized = np.array(mask_pil_resized)
+                    
+                    # Add to composite mask. We use class_id + 1 so instances are 1, 2, ...
+                    # and background remains 0.
+                    composite_mask[mask_np_resized > 0] = class_id + 1
+
+                # Flip mask vertically to match visual orientation
+                composite_mask_flipped = np.flipud(composite_mask)
+                
+                # Save the composite mask as a single-channel PNG
+                Image.fromarray(composite_mask_flipped).save(unet_mask_path)
 
         if config['output']['include_boxes']:
             box_label_output_path = f'{save_directory}/artificial_dataset/box_labels/{save_files_path}.txt'
@@ -1394,7 +1629,7 @@ def generate_overlays(
             yaml.dump(yaml_data, f_yaml, sort_keys=False, default_flow_style=None)
         print(f"Saved YOLO dataset YAML to {dataset_yaml_path}")
 
-    elif config['output']['include_coco_masks']:
+    if config['output']['include_coco_masks']:
         # Finalize and save COCO dataset (if it was populated)
         if coco_dataset and coco_annotations: # Ensure it was initialized and has data
             # Add images info (ensure this covers all images, including those in val split)
@@ -1439,6 +1674,23 @@ def generate_overlays(
             with open(coco_output_path, 'w') as f_coco_json:
                 json.dump(coco_dataset, f_coco_json, indent=2) # Add indent for readability
             print(f"Saved COCO annotations to {coco_output_path}")
+
+    if config['output']['include_hrnet_masks']:
+        if config['paths']['hrnet_remote_dir']:
+            hrnet_save_base = config['paths']['hrnet_remote_dir']
+        else:
+            hrnet_save_base = os.path.join(save_directory, 'artificial_dataset', 'hrnet_masks')
+
+        train_lst_path = os.path.join(hrnet_save_base, 'list', 'bioacoustics', 'train.lst')
+        with open(train_lst_path, 'w') as f:
+            f.write('\n'.join(hrnet_train_list))
+        print(f"Saved HRNet train list to {train_lst_path}")
+
+            
+        val_lst_path = os.path.join(hrnet_save_base, 'list', 'bioacoustics', 'val.lst')
+        with open(val_lst_path, 'w') as f:
+            f.write('\n'.join(hrnet_val_list))
+        print(f"Saved HRNet validation list to {val_lst_path}")
 
     if plot:
         plot_labels(config, [0,n], save_directory)

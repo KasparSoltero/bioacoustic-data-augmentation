@@ -8,3 +8,4 @@ matplotlib
 soundfile
 pydub
 chardet
+scikit-image

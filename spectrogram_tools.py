@@ -513,13 +513,19 @@ def load_spectrogram_chunks(path, chunk_length=10, overlap=0.5, resample_rate=48
     return [spec_transform(chunk) for chunk in chunks]
 
 # masks
-def generate_masks(overlay_waveform, image_id, category_id, last_box, threshold_db=10, log_scale=True, debug=False):
+def generate_masks(overlay_waveform, image_id, category_id, last_box, threshold_db=10, log_scale=True, freq_bounds=None, debug=False):
     """
     Generate masks from positive overlay spectrogram.
     Args:
         positive_spec: Spectrogram of positive overlay (freq x time)
     """
     overlay_spec = transform_waveform(overlay_waveform, to_spec='power')
+    if freq_bounds is not None:
+        # zero values outside bounds - careful here, freq bounds are in bins which depends on similarity of earlier power spec transform
+        freq_min, freq_max = freq_bounds
+        overlay_spec[:, :freq_min] = 0
+        overlay_spec[:, freq_max:] = 0
+
     if log_scale:
         overlay_spec = log_scale_spectrogram(overlay_spec)
 

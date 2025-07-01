@@ -624,9 +624,14 @@ def create_video_with_audio(audio_paths, output_video_path="output_video.mp4", f
         final_clip = video_clip.set_audio(audio_clip)
         final_clip.write_videofile(output_video_path, fps=frame_rate)
 
-file_pth_1 = '/Volumes/Rectangle/ecocommons/671b27aa4d433dd329da2c6c/2024/10/18/20241018_030800_from_20241018_030800.WAV'
-file_pth_2 = '/Volumes/Rectangle/ecocommons/671b27aa4d433dd329da2c6d/2024/10/18/20241018_030800_from_20241018_030800.WAV'
-plot_spectrogram([file_pth_1, file_pth_2], show=True, crop_time=[1,15], logscale=True, color='dusk', fontsize=12)
+# pathname = '/Users/kaspar/Downloads/XC99264 - Lizard Buzzard - Kaupifalco monogrammicus.mp3'
+# plot_spectrogram(pathname, color='bw', logscale=True, show=True, crop_time=[0, 10], fontsize=16)
+
+# pathname = "/Users/kaspar/Downloads/CJ95_BIRP_131103_085925_000.flac"
+# plot_spectrogram(pathname, color='dusk', logscale=True, show=True)
+# file_pth_1 = '/Volumes/Rectangle/ecocommons/671b27aa4d433dd329da2c6c/2024/10/18/20241018_030800_from_20241018_030800.WAV'
+# file_pth_2 = '/Volumes/Rectangle/ecocommons/671b27aa4d433dd329da2c6d/2024/10/18/20241018_030800_from_20241018_030800.WAV'
+# plot_spectrogram([file_pth_1, file_pth_2], show=True, crop_time=[1,15], logscale=True, color='dusk', fontsize=12)
 # file_path_3= '/Users/kaspar/Downloads/1.WAV'
 # file_path_2= '/Users/kaspar/Downloads/2.WAV'
 # file_path_1= '/Users/kaspar/Downloads/3.WAV'
