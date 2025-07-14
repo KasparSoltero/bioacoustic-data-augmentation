@@ -7,20 +7,20 @@ input:
   - .m4a
   limit_positives: 0
 output:
-  highpass_variable: 0
-  include_boxes: true # time-frequency bounding boxes
+  highpass_variable: 1000
+  include_boxes: false # time-frequency bounding boxes
   include_kaytoo: false # coarse labels (soundfile?)
   include_coco_masks: false
   include_yolo_masks: false
   include_hrnet_masks: false # masks are 0 for background, 1, 2, 3... for classes (they look black in file viewer)
-  include_unetplusplus_masks: true # very similar to hrnet masks but different structure and no lst files. 2 mask folders with 'vocalisation instance' and 'species' labels
-  mask_threshold_db: 15
+  include_unetplusplus_masks: true # very similar to hrnet masks but different structure and no lst files
+  mask_threshold_db: 5
   log_scale_masks: true
   include_soundfile: false
   include_spectrogram: true
   length: 10
-  lowpass_variable: 0
-  n: 3
+  lowpass_variable: 100
+  n: 1000
   negative_overlay_range:
   - 0
   - 2
@@ -32,7 +32,7 @@ output:
   repetitions:
   - 1
   - 5
-  single_class: false
+  single_class: true
   snr_range:
   - 0.9
   - 1
@@ -40,7 +40,7 @@ output:
   concatenate: false
 paths:
   hrnet_remote_dir: '/Users/kaspar/Library/CloudStorage/GoogleDrive-kaspar.kimutai@gmail.com/My Drive/Colab Notebooks/HRNet-Semantic-Segmentation/data' # this path is overwritten
-  dataset: example_dataset
+  dataset: /Volumes/Rectangle/bioacoustic-data-augmentation-dataset
   do_train_val_split: false
   negative: negative
   noise: noise
