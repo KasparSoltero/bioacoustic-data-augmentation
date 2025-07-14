@@ -7,6 +7,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.colors as mcolors
 from matplotlib.colors import hsv_to_rgb, ListedColormap
 from PIL import Image
 import csv
@@ -135,6 +136,20 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
         rgba_color = tuple(c / 255.0 for c in rgb) + (1.0,)
         hrnet_cmap_colors.append(rgba_color)
     hrnet_custom_cmap = ListedColormap(hrnet_cmap_colors)
+    label_colors = [ #temp alternative
+        (1.0, 0.0, 0.0, 1.0),    # Red
+        (0.0, 1.0, 0.0, 1.0),    # Green
+        (0.0, 0.0, 1.0, 1.0),    # Blue
+        (1.0, 1.0, 0.0, 1.0),    # Yellow
+        (1.0, 0.0, 1.0, 1.0),    # Magenta
+        (0.0, 1.0, 1.0, 1.0),    # Cyan
+        (0.5, 0.0, 0.5, 1.0),    # Purple
+        (1.0, 0.65, 0.0, 1.0),   # Orange
+        (0.0, 0.5, 0.0, 1.0),    # Dark Green
+        (0.75, 0.75, 0.75, 1.0)  # Light Grey
+    ]
+    hrnet_cmap_colors = [(0,0,0,0)] + label_colors
+    hrnet_custom_cmap = mcolors.ListedColormap(hrnet_cmap_colors)
 
     # Calculate the number of rows and columns for subplots
     if idx[1] == -1: # Default to plotting first 9 images if end index is -1
@@ -153,6 +168,8 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
     masks_enabled = config['output']['include_yolo_masks'] or config['output']['include_coco_masks'] or config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']
     if masks_enabled:
         actual_figure_rows = base_rows * 2 # Double rows if masks are to be plotted underneath
+    if config['output']['include_unetplusplus_masks']:
+        actual_figure_rows += 1 # another one!
 
     # Limit rows to prevent excessively large plots, e.g., max 4 image rows (8 total rows with masks)
     MAX_IMAGE_ROWS = 4
@@ -477,6 +494,27 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                                     vmin=0, 
                                     vmax=len(hrnet_cmap_colors) - 1)
                         thisax.set_title(f'Unet++ Mask ({np.max(mask_array) if mask_array.size > 0 else 0} instances)', fontsize=8)
+
+                    unet_species_path = f"{save_directory}/artificial_dataset/unetplusplus_masks/{split_folder}/labels/{image_index_str}.png"
+                    if os.path.exists(unet_species_path):
+                        species_image = Image.open(unet_species_path)
+                        species_array = np.array(species_image)
+
+                        extraax = axes[mask_ax_row + 1][current_col_idx]
+                        extraax.clear()
+                        extraax.set_xticks([])
+                        extraax.set_yticks([])
+                        # Display a light version of the original image as background for masks
+                        extraax.imshow(image_array, origin='upper', alpha=0.9, cmap=cmap_to_use)
+                        extraax.imshow(species_array,
+                                    origin='upper',
+                                    aspect='auto',
+                                    cmap=hrnet_custom_cmap, 
+                                    interpolation='none', 
+                                    vmin=0, 
+                                    vmax=len(hrnet_cmap_colors) - 1)
+                        extraax.set_title(f'Unet++ Mask ({np.max(species_array) if species_array.size > 0 else 0} species)', fontsize=8)
+
                     else:
                         thisax.text(0.5, 0.5, 'Unet++ Mask Not Found', ha='center', va='center', transform=thisax.transAxes, fontsize=8)
                         thisax.set_title('Unet++ Mask (no file)', fontsize=8)
@@ -974,6 +1012,7 @@ def generate_overlays(
         n_positive_overlays = random.randint(positive_overlay_range[0], positive_overlay_range[1])
         print(f'\n{idx}:    creating new image with {n_positive_overlays} positive overlays, bg={os.path.basename(bg_noise_path)}')
         succuessful_positive_overlays = 0
+        instance_counter = 0
         while_catch = 0
         while succuessful_positive_overlays < n_positive_overlays:
             while_catch += 1
@@ -987,9 +1026,7 @@ def generate_overlays(
             else: 
                 positive_segment_path = random.choice(positive_segment_paths)
 
-            if config['output']['instance_class']:
-                species_class = 'instance_' + str(succuessful_positive_overlays)
-            elif config['output']['single_class']:
+            if config['output']['single_class']:
                 species_class = 'single_class'
             else:
                 species_class = positive_datatags[os.path.basename(positive_segment_path)[:-4]].get('species', None)
@@ -1274,8 +1311,10 @@ def generate_overlays(
                 # Store the full-resolution binary mask and its class ID
                 hrnet_components_for_image.append({
                     "mask": binary_mask_overlay,
-                    "class_id": classes[-1] 
+                    "class_id": classes[-1],
+                    "instance_id": instance_counter
                 })
+                instance_counter += 1
 
             # potentially repeat song
             if repetitions:
@@ -1350,8 +1389,10 @@ def generate_overlays(
 
                                 hrnet_components_for_image.append({
                                     "mask": binary_mask_overlay_rep,
-                                    "class_id": classes[-1]
+                                    "class_id": classes[-1],
+                                    "instance_id": instance_counter
                                 })
+                                instance_counter += 1
 
                         else:
                             break
@@ -1478,21 +1519,25 @@ def generate_overlays(
                 unet_base_path = f"{save_directory}/artificial_dataset/unetplusplus_masks"
                 unet_image_path = f"{unet_base_path}/{split}/images/{idx}.png"
                 unet_mask_path = f"{unet_base_path}/{split}/masks/{idx}.png"
+                unet_labels_path = f"{unet_base_path}/{split}/labels/{idx}.png" #species labels
 
                 # Create directories
                 os.makedirs(os.path.dirname(unet_image_path), exist_ok=True)
                 os.makedirs(os.path.dirname(unet_mask_path), exist_ok=True)
+                os.makedirs(os.path.dirname(unet_labels_path), exist_ok=True)
 
                 # Save the main spectrogram image as PNG
                 image.save(unet_image_path, format='PNG')
                 
                 # Create the composite instance mask (this logic is copied from HRNet)
                 img_width, img_height = image.size
-                composite_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                species_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                instance_mask = np.zeros((img_height, img_width), dtype=np.uint8)
 
                 for component in hrnet_components_for_image:
                     full_res_mask = component['mask']
-                    class_id = component['class_id']
+                    species_id = component['class_id']
+                    instance_id = component['instance_id']
                     
                     # Resize the full-resolution binary mask
                     mask_pil_resized = Image.fromarray(full_res_mask).resize(
@@ -1502,13 +1547,16 @@ def generate_overlays(
                     
                     # Add to composite mask. We use class_id + 1 so instances are 1, 2, ...
                     # and background remains 0.
-                    composite_mask[mask_np_resized > 0] = class_id + 1
+                    instance_mask[mask_np_resized > 0] = instance_id + 1
+                    species_mask[mask_np_resized > 0] = species_id + 1
 
                 # Flip mask vertically to match visual orientation
-                composite_mask_flipped = np.flipud(composite_mask)
+                instance_mask_flipped = np.flipud(instance_mask)
+                species_mask_flipped = np.flipud(species_mask)
                 
                 # Save the composite mask as a single-channel PNG
-                Image.fromarray(composite_mask_flipped).save(unet_mask_path)
+                Image.fromarray(instance_mask_flipped).save(unet_mask_path)
+                Image.fromarray(species_mask_flipped).save(unet_labels_path)
 
         if config['output']['include_boxes']:
             box_label_output_path = f'{save_directory}/artificial_dataset/box_labels/{save_files_path}.txt'

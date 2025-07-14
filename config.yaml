@@ -8,19 +8,19 @@ input:
   limit_positives: 0
 output:
   highpass_variable: 0
-  include_boxes: false # time-frequency bounding boxes
+  include_boxes: true # time-frequency bounding boxes
   include_kaytoo: false # coarse labels (soundfile?)
   include_coco_masks: false
   include_yolo_masks: false
   include_hrnet_masks: false # masks are 0 for background, 1, 2, 3... for classes (they look black in file viewer)
-  include_unetplusplus_masks: true # very similar to hrnet masks but different structure and no lst files
+  include_unetplusplus_masks: true # very similar to hrnet masks but different structure and no lst files. 2 mask folders with 'vocalisation instance' and 'species' labels
   mask_threshold_db: 15
   log_scale_masks: true
   include_soundfile: false
   include_spectrogram: true
   length: 10
   lowpass_variable: 0
-  n: 1000
+  n: 3
   negative_overlay_range:
   - 0
   - 2
@@ -32,8 +32,7 @@ output:
   repetitions:
   - 1
   - 5
-  single_class: true
-  instance_class: true # 1 label per vocalisation regardless of species (ignores single_class)
+  single_class: false
   snr_range:
   - 0.9
   - 1
@@ -49,5 +48,5 @@ paths:
   vocalisations: vocalisations
 plot:
   color_filter: dusk
-  toggle: false
+  toggle: true
   show_labels: true

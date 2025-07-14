@@ -12,6 +12,8 @@ from pydub import AudioSegment
 from pydub.playback import play
 import copy
 
+### this file needs refactoring
+
 # manual verification workflow functions
 def load_and_process_audio(file_path, images_per_file, chunk_length, overlap, resample_rate, color_mode='HSV'):
     spectrograms = load_spectrogram(file_path, max=images_per_file, chunk_length=chunk_length, overlap=overlap, resample_rate=resample_rate, unit_type='power')
@@ -624,11 +626,6 @@ def rle_decode(counts, shape):
             idx += count
     
     return mask.reshape(shape)
-
-# main spectrogram functions
-# def get_device():
-    # try mps first
-    # if torch.backends and torch.back
 
 
 def spec_to_image(spectrogram, image_normalise=0.2):
