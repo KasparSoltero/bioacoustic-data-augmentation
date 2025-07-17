@@ -5,11 +5,11 @@ input:
   - .mp3
   - .flac
   - .m4a
-  limit_positives: 0
+  limit_positives: 10
 output:
-  highpass_variable: 0
+  highpass_variable: 1000
   include_boxes: true # time-frequency bounding boxes
-  include_kaytoo: false # coarse labels (soundfile?)
+  include_kaytoo: true # coarse labels (soundfile?)
   include_coco_masks: false
   include_yolo_masks: false
   include_hrnet_masks: false # masks are 0 for background, 1, 2, 3... for classes (they look black in file viewer)
@@ -19,15 +19,15 @@ output:
   include_soundfile: false
   include_spectrogram: true
   length: 10
-  lowpass_variable: 0
-  n: 3
+  lowpass_variable: 100
+  n: 200
   negative_overlay_range:
   - 0
   - 2
   overwrite_output_path: true
   positive_overlay_range:
-  - 0
-  - 5
+  - 1
+  - 1
   rainbow_frequency: false
   repetitions:
   - 1
@@ -48,5 +48,5 @@ paths:
   vocalisations: vocalisations
 plot:
   color_filter: dusk
-  toggle: true
+  toggle: false
   show_labels: true

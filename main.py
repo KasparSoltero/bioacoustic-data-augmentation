@@ -136,20 +136,20 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
         rgba_color = tuple(c / 255.0 for c in rgb) + (1.0,)
         hrnet_cmap_colors.append(rgba_color)
     hrnet_custom_cmap = ListedColormap(hrnet_cmap_colors)
-    label_colors = [ #temp alternative
-        (1.0, 0.0, 0.0, 1.0),    # Red
-        (0.0, 1.0, 0.0, 1.0),    # Green
-        (0.0, 0.0, 1.0, 1.0),    # Blue
-        (1.0, 1.0, 0.0, 1.0),    # Yellow
-        (1.0, 0.0, 1.0, 1.0),    # Magenta
-        (0.0, 1.0, 1.0, 1.0),    # Cyan
-        (0.5, 0.0, 0.5, 1.0),    # Purple
-        (1.0, 0.65, 0.0, 1.0),   # Orange
-        (0.0, 0.5, 0.0, 1.0),    # Dark Green
-        (0.75, 0.75, 0.75, 1.0)  # Light Grey
-    ]
-    hrnet_cmap_colors = [(0,0,0,0)] + label_colors
-    hrnet_custom_cmap = mcolors.ListedColormap(hrnet_cmap_colors)
+    # label_colors = [ #temp alternative
+    #     (1.0, 0.0, 0.0, 1.0),    # Red
+    #     (0.0, 1.0, 0.0, 1.0),    # Green
+    #     (0.0, 0.0, 1.0, 1.0),    # Blue
+    #     (1.0, 1.0, 0.0, 1.0),    # Yellow
+    #     (1.0, 0.0, 1.0, 1.0),    # Magenta
+    #     (0.0, 1.0, 1.0, 1.0),    # Cyan
+    #     (0.5, 0.0, 0.5, 1.0),    # Purple
+    #     (1.0, 0.65, 0.0, 1.0),   # Orange
+    #     (0.0, 0.5, 0.0, 1.0),    # Dark Green
+    #     (0.75, 0.75, 0.75, 1.0)  # Light Grey
+    # ]
+    # hrnet_cmap_colors = [(0,0,0,0)] + label_colors
+    # hrnet_custom_cmap = mcolors.ListedColormap(hrnet_cmap_colors)
 
     # Calculate the number of rows and columns for subplots
     if idx[1] == -1: # Default to plotting first 9 images if end index is -1
@@ -1432,7 +1432,7 @@ def generate_overlays(
                         coarse_class = 0
                 else:
                     if len(classes) > 0:
-                        coarse_class = max(classes) + 1
+                        coarse_class = classes[-1]
                 f.write(f'{idx}.wav,{coarse_class}\n')
         
         if config['output']['include_spectrogram']:
