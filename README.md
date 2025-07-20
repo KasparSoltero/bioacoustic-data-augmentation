@@ -11,7 +11,7 @@
 
 each category may have a tags.csv file containing:
 - a 'filename' column.
-- vocalisations csv needs 'species' column to get labelled output.
+- vocalisations csv needs 'species' column to get labelled output. (for input:labels_format:'folders', vocalisations will be assigned species by subfolder instead of tags.csv)
 - (optional) noise can have a csv with 'highpass' and 'lowpass' columns. these constrain the bandpass filter applied to soundscapes generated using that noise clip.
 - negative category doesn't need a tags file but it won't break anything.
 

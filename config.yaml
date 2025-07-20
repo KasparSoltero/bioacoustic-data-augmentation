@@ -1,11 +1,11 @@
 input:
   allowed_files:
-  - .WAV
-  - .wav
-  - .mp3
-  - .flac
-  - .m4a
-  limit_positives: 10
+  - WAV
+  - wav
+  - mp3
+  - flac
+  limit_positives: 0
+  labels_format: 'spreadsheet' ##### 'folders'
 output:
   highpass_variable: 1000
   include_boxes: true # time-frequency bounding boxes
@@ -20,32 +20,32 @@ output:
   include_spectrogram: true
   length: 10
   lowpass_variable: 100
-  n: 200
+  n: 1000
   negative_overlay_range:
   - 0
-  - 2
+  - 3
   overwrite_output_path: true
   positive_overlay_range:
   - 1
-  - 1
+  - 2
   rainbow_frequency: false
   repetitions:
   - 1
-  - 5
+  - 4
   single_class: true
   snr_range:
-  - 0.9
-  - 1
+  - 0.05
+  - 0.5
   val_ratio: 0.8
   concatenate: false
 paths:
   hrnet_remote_dir: '/Users/kaspar/Library/CloudStorage/GoogleDrive-kaspar.kimutai@gmail.com/My Drive/Colab Notebooks/HRNet-Semantic-Segmentation/data' # this path is overwritten
-  dataset: /Volumes/Rectangle/bioacoustic-data-augmentation-dataset
+  dataset: example_dataset
   do_train_val_split: false
-  negative: negative
+  negative: vocalisations_xc
   noise: noise
   output: augmented_dataset_output # this path is overwritten every time main.py runs
-  vocalisations: vocalisations
+  vocalisations: test_localisation_vocalisation
 plot:
   color_filter: dusk
   toggle: false

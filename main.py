@@ -711,6 +711,7 @@ def _plot_labels(config, idx=[0,-1], save_directory='output'):
 def read_tags(path, config, default_species='unknown'):
     # reads a csv, returns dictionaries of filenames with each column's attributes
     tags_path = os.path.join(path, 'tags.csv')
+    tags_data = {}
     if os.path.exists(tags_path):
         with open(tags_path, 'rb') as raw_file:
             result = chardet.detect(raw_file.read())
@@ -721,62 +722,67 @@ def read_tags(path, config, default_species='unknown'):
             tags_data = {}
             for row in reader:
                 filename = row['filename']
-                filename = filename.split('.')[:-1]
-                filename = '.'.join(filename)
-                tags_data[filename] = {}
+                file_path = os.path.join(path, filename)
+                tags_data[file_path] = {}
                 for header in reader.fieldnames:
-                    tags_data[filename][header] = row[header]
+                    tags_data[file_path][header] = row[header]
                 
-        return tags_data
-    else:
-        tags_data = {}
-        for f in os.listdir(path):
-            for ext in config['input']['allowed_files']:
-                if f.endswith(ext) and not f.startswith('.'):
-                    found_filename = f.split('.')[0]
-                    tags_data[found_filename] = {'filename': found_filename, 'species': default_species}
-        return tags_data
+    true_tags_data = {}
+    for f in os.listdir(path):
+        if not f.startswith('.'):
+            fileextension = f.split('.')[-1]
+            if fileextension in config['input']['allowed_files']:
+                file_path = os.path.join(path, f)
+                if tags_data.get(file_path):
+                    true_tags_data[file_path] = tags_data[file_path]
+                    tags_data.pop(file_path)
+                else:
+                    true_tags_data[file_path] = {'filename': f, 'species': default_species}
+
+    return true_tags_data
 
 def load_input_dataset(data_root, background_path, positive_path, negative_path, config):
     positive_segment_paths = []
-    positive_datatags = read_tags(os.path.join(data_root, positive_path), config, 1)
-    
-    # Get the list of files and randomly shuffle it
-    files = os.listdir(os.path.join(data_root, positive_path))
-    random.shuffle(files)
-    for f in files:
-        if config['input']['limit_positives'] and len(positive_segment_paths) >= config['input']['limit_positives']:
-            print(f'Limiting positive examples to {config["input"]["limit_positives"]}')
-            print(f'chosen positives: {positive_segment_paths}')
-            break
-
-        for ext in config['input']['allowed_files']:
-            if f.endswith(ext) and not f.startswith('.'):
-                found_filename = f.split('.')[:-1]
-                found_filename = '.'.join(found_filename)
-                #  overlay_label for tracing training data, e.g. 5th bird -> bi5
-                if found_filename in positive_datatags:
-                    positive_datatags[found_filename]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(found_filename))
-                else: 
-                    positive_datatags[found_filename] = {'filename': found_filename, 'species': 'unknown', 'overlay_label': 'unknown'}
-                full_audio_path = os.path.join(data_root, positive_path, f)
-
-                # temp #todo remove just quickly
-                if positive_datatags[found_filename]['species'] == 'unknown':
-                    break # skip unknown species
-
-                positive_segment_paths.append(full_audio_path)
+    if config['input']['labels_format'] == 'spreadsheet':
+        positive_datatags = read_tags(os.path.join(data_root, positive_path), config, 1)
+        # randomly shuffle
+        files = os.listdir(os.path.join(data_root, positive_path))
+        random.shuffle(files)
+        for f in files:
+            if config['input']['limit_positives'] and len(positive_segment_paths) >= config['input']['limit_positives']:
+                print(f'Limiting positive examples to {config["input"]["limit_positives"]}')
+                print(f'chosen positives: {positive_segment_paths}')
                 break
-
+            if not f.startswith('.'):
+                fileextension = f.split('.')[-1]
+                if fileextension in config['input']['allowed_files']:
+                    file_path = os.path.join(data_root, positive_path, f)
+                    positive_segment_paths.append(file_path)
+                    if positive_datatags.get(file_path):
+                        positive_datatags[file_path]['overlay_label'] = positive_path[:2]+str(list(positive_datatags.keys()).index(file_path))
+                    else:
+                        print(f'Error: {file_path} not found in positive_datatags')
+    elif config['input']['labels_format']=='folders':
+        positive_datatags = {}
+        for subdir in os.listdir(os.path.join(data_root, positive_path)):
+            if os.path.isdir(os.path.join(data_root, positive_path, subdir)):
+                species_class = subdir
+                for f in os.listdir(os.path.join(data_root, positive_path, subdir)):
+                    if not f.startswith('.'):
+                        fileextension = f.split('.')[-1]
+                        if fileextension in config['input']['allowed_files']:
+                            file_path = os.path.join(data_root, positive_path, subdir, f)
+                            positive_segment_paths.append(file_path)
+                            positive_datatags[file_path] = {'filename': file_path, 'species': species_class, 'overlay_label': 'none'}
+    
     negative_segment_paths = []
     negative_datatags = read_tags(os.path.join(data_root, negative_path), config, 0)
     for f in os.listdir(os.path.join(data_root, negative_path)):
         for ext in config['input']['allowed_files']:
             if f.endswith(ext) and not f.startswith('.'):
-                found_filename = f.split('.')[:-1]
-                found_filename = '.'.join(found_filename)
-                negative_datatags[found_filename]['overlay_label'] = negative_path[:2]+str(list(negative_datatags.keys()).index(found_filename))
-                negative_segment_paths.append(os.path.join(data_root, negative_path, f))
+                file_path = os.path.join(data_root, negative_path, f)
+                negative_datatags[file_path]['overlay_label'] = negative_path[:2]+str(list(negative_datatags.keys()).index(file_path))
+                negative_segment_paths.append(file_path)
                 break
 
     background_noise_paths = []
@@ -784,10 +790,9 @@ def load_input_dataset(data_root, background_path, positive_path, negative_path,
     for f in os.listdir(os.path.join(data_root, background_path)):
         for ext in config['input']['allowed_files']:
             if f.endswith(ext) and not f.startswith('.'):
-                found_filename = f.split('.')[:-1]
-                found_filename = '.'.join(found_filename)
-                background_datatags[found_filename]['overlay_label'] = 'bg'+str(list(background_datatags.keys()).index(found_filename))
-                background_noise_paths.append(os.path.join(data_root, background_path, f))
+                file_path = os.path.join(data_root, background_path, f)
+                background_datatags[file_path]['overlay_label'] = 'bg'+str(list(background_datatags.keys()).index(file_path))
+                background_noise_paths.append(file_path)
                 break
 
     return positive_segment_paths, positive_datatags, negative_segment_paths, negative_datatags, background_noise_paths, background_datatags
@@ -931,7 +936,7 @@ def generate_overlays(
             break
         # label = str(idx) # image label
         # Select a random background noise (keep trying until one is long enough)
-        noise_db = -9
+        noise_db = 0
         bg_noise_waveform_cropped = None
         while bg_noise_waveform_cropped is None:
             if specify_noise is not None:
@@ -961,16 +966,14 @@ def generate_overlays(
         # set db
         bg_noise_waveform_cropped = transform_waveform(bg_noise_waveform_cropped, set_db=noise_db)
 
-        # label += '_' + background_datatags[os.path.basename(bg_noise_path)[:-4]]['overlay_label']
-
         # highpass filter set by background noise tags data
-        highpass_hz = background_datatags[os.path.basename(bg_noise_path)[:-4]].get('highpass', None)
+        highpass_hz = background_datatags[bg_noise_path].get('highpass', None)
         if highpass_hz:
             highpass_hz = int(highpass_hz)
         else:
             highpass_hz = 0
         highpass_hz += random.randint(0,config['output']['highpass_variable'])
-        lowpass_hz = background_datatags[os.path.basename(bg_noise_path)[:-4]].get('lowpass', None)
+        lowpass_hz = background_datatags[bg_noise_path].get('lowpass', None)
         if lowpass_hz:
             lowpass_hz = int(lowpass_hz)
         else:
@@ -984,8 +987,6 @@ def generate_overlays(
         n_negative_overlays = random.randint(negative_overlay_range[0], negative_overlay_range[1])
         for j in range(n_negative_overlays):
             negative_segment_path = random.choice(negative_segment_paths)
-            # label += '_'+negative_datatags[os.path.basename(negative_segment_path)[:-4]]['overlay_label']
-            
             negative_waveform, neg_sr = load_waveform(negative_segment_path)
 
             neg_db = 10*torch.log10(torch.tensor(random.uniform(snr_range[0], snr_range[1])))+noise_db
@@ -1029,7 +1030,7 @@ def generate_overlays(
             if config['output']['single_class']:
                 species_class = 'single_class'
             else:
-                species_class = positive_datatags[os.path.basename(positive_segment_path)[:-4]].get('species', None)
+                species_class = positive_datatags[positive_segment_path].get('species', None)
                 if not species_class:
                     species_class = 'unknown'
 
@@ -1097,7 +1098,7 @@ def generate_overlays(
                 # dynamically find the new bounding box after power shift
                 pos_spec_temp = transform_waveform(positive_waveform_cropped, to_spec='power')
             else:
-                print(f"{idx}: Error, unable to find bounding box for {positive_datatags[os.path.basename(positive_segment_path)[:-4]]['overlay_label']}")
+                print(f"{idx}: Error, unable to find bounding box for {positive_datatags[positive_segment_path]['overlay_label']}")
                 # which was the error
                 print(f"first_pass_freq_start: {first_pass_freq_start}, first_pass_freq_end: {first_pass_freq_end}")
                 print(f"end_time_bins: {start_time_bins+seg_time_bins}, bg_time_bins: {bg_time_bins}")
