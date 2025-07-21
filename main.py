@@ -844,7 +844,7 @@ def generate_overlays(
         # songs can be cropped over edges, minimum 1 second present
         # images are normalised to 0-100 dB, then 0-1 to 255
         # 80:20 split train and val
-        # jpeg 640x640 images
+        # png size specified in config
     # TODO:
         # training data spacings for long ones, add distance/spacing random additions in loop
 
@@ -921,6 +921,9 @@ def generate_overlays(
         # Create the required directory structure for Unet++
         os.makedirs(os.path.join(save_directory, 'artificial_dataset', 'unetplusplus_masks', 'train', 'masks'), exist_ok=True)
         os.makedirs(os.path.join(save_directory, 'artificial_dataset', 'unetplusplus_masks', 'val', 'masks'), exist_ok=True)
+        # save config as generation_params.yaml
+        with open(os.path.join(save_directory, 'artificial_dataset', 'unetplusplus_masks', 'generation_params.yaml'), 'w') as f:
+            yaml.dump(config, f)
 
     if config['output']['include_kaytoo']:
         labels_path = f'classifiers/augmented_dataset/labels.csv'
@@ -929,6 +932,9 @@ def generate_overlays(
             with open(labels_path, 'w') as f:
                 f.write('filename,primary_label\n')
 
+    specconfig=config['output']['spec_params']
+
+    hasplotted=False
     # main loop to create and overlay audio
     for idx_offset in range(n):
         idx = start_idx + idx_offset  # Use adjusted index (for concatenation mode)
@@ -1000,7 +1006,7 @@ def generate_overlays(
             # label += 'p' + f"{(10 ** ((neg_db - noise_db) / 10)).item():.3f}" # power label
             
         new_waveform = bg_noise_waveform_cropped.clone()
-        bg_spec_temp = transform_waveform(bg_noise_waveform_cropped, to_spec='power')
+        bg_spec_temp = transform_waveform(bg_noise_waveform_cropped, to_spec='power', specconfig=specconfig)
         bg_time_bins, bg_freq_bins = bg_spec_temp.shape[2], bg_spec_temp.shape[1]
         freq_bins_cutoff_bottom = int((highpass_hz / (sample_rate / 2)) * bg_freq_bins)
         freq_bins_cutoff_top = int((lowpass_hz / (sample_rate / 2)) * bg_freq_bins)
@@ -1053,7 +1059,7 @@ def generate_overlays(
             edge_avoidance = 0.005 # 0.5% of final image per side, 50 milliseconds 120 Hz rounds to 4 and 5 bins -> 43 milliseconds 117 Hz
             freq_edge, time_edge = int(edge_avoidance*bg_freq_bins), int(edge_avoidance*bg_time_bins)
             # first pass find frequency top and bottom
-            positive_spec_temp = transform_waveform(positive_waveform_cropped, to_spec='power')
+            positive_spec_temp = transform_waveform(positive_waveform_cropped, to_spec='power', specconfig=specconfig)
             seg_freq_bins, seg_time_bins = positive_spec_temp.shape[1], positive_spec_temp.shape[2]
             start_time_bins = int(start * bg_time_bins / bg_noise_waveform_cropped.shape[1])
             first_pass_freq_start, first_pass_freq_end=None, None
@@ -1084,9 +1090,9 @@ def generate_overlays(
                 full_spec = torch.zeros_like(bg_spec_temp[:, :, max(0,start_time_bins):start_time_bins+seg_time_bins])
                 full_spec[:, first_pass_freq_start:first_pass_freq_end, :] = bg_spec_temp[:, first_pass_freq_start:first_pass_freq_end, max(0,start_time_bins):start_time_bins+seg_time_bins]
                 waveform_at_box = torchaudio.transforms.GriffinLim(
-                    n_fft=2048, 
-                    win_length=2048, 
-                    hop_length=512, 
+                    n_fft=specconfig['n_fft'], 
+                    win_length=specconfig['win_length'], 
+                    hop_length=specconfig['hop_length'], 
                     power=2.0
                 )(full_spec)
                 noise_db_at_box = 10*torch.log10(torch.mean(torch.square(waveform_at_box)))
@@ -1096,7 +1102,7 @@ def generate_overlays(
                 # power shift signal
                 positive_waveform_cropped = transform_waveform(positive_waveform_cropped, set_db=pos_db)
                 # dynamically find the new bounding box after power shift
-                pos_spec_temp = transform_waveform(positive_waveform_cropped, to_spec='power')
+                pos_spec_temp = transform_waveform(positive_waveform_cropped, to_spec='power', specconfig=specconfig)
             else:
                 print(f"{idx}: Error, unable to find bounding box for {positive_datatags[positive_segment_path]['overlay_label']}")
                 # which was the error
@@ -1104,6 +1110,7 @@ def generate_overlays(
                 print(f"end_time_bins: {start_time_bins+seg_time_bins}, bg_time_bins: {bg_time_bins}")
                 print(f"seg_freq_bins: {seg_freq_bins}, seg_time_bins: {seg_time_bins}")
                 continue
+
 
             found=0
             # if seg_time_bins < bg_time_bins:
@@ -1264,7 +1271,7 @@ def generate_overlays(
             if config['output']['include_yolo_masks']:
                 # 1. Generate the binary mask for this specific 'overlay'
                 #    The 'overlay' tensor here is the waveform of the single positive event placed on a zero background.
-                overlay_spec_for_mask = transform_waveform(overlay, to_spec='power')
+                overlay_spec_for_mask = transform_waveform(overlay, to_spec='power', specconfig=specconfig)
                 if config['output'].get('log_scale_masks', True): # Assumes log_scale for masks
                     overlay_spec_for_mask = log_scale_spectrogram(overlay_spec_for_mask)
                 
@@ -1298,7 +1305,7 @@ def generate_overlays(
 
             if config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']:
                 # Generate a binary mask for this specific overlay waveform
-                overlay_spec_for_mask = transform_waveform(overlay, to_spec='power')
+                overlay_spec_for_mask = transform_waveform(overlay, to_spec='power', specconfig=specconfig)
                 # set outside bounds to 0
                 overlay_spec_for_mask[:, :freq_bins_cutoff_bottom, :] = 0
                 overlay_spec_for_mask[:, freq_bins_cutoff_top:, :] = 0
@@ -1352,7 +1359,7 @@ def generate_overlays(
                                 coco_annotations.append(mask_annotation)
 
                             if config['output']['include_yolo_masks']:
-                                overlay_spec_for_mask_rep = transform_waveform(overlay, to_spec='power')
+                                overlay_spec_for_mask_rep = transform_waveform(overlay, to_spec='power', specconfig=specconfig)
                                 if config['output'].get('log_scale_masks', True):
                                     overlay_spec_for_mask_rep = log_scale_spectrogram(overlay_spec_for_mask_rep)
                                 
@@ -1377,7 +1384,7 @@ def generate_overlays(
                                 yolo_data_for_files[idx].extend(yolo_strings_for_this_overlay_rep)
 
                             if config['output']['include_hrnet_masks'] or config['output']['include_unetplusplus_masks']:
-                                overlay_spec_for_mask_rep = transform_waveform(overlay, to_spec='power')
+                                overlay_spec_for_mask_rep = transform_waveform(overlay, to_spec='power', specconfig=specconfig)
                                 # set outside bounds to 0
                                 overlay_spec_for_mask_rep[:, :freq_bins_cutoff_bottom, :] = 0
                                 overlay_spec_for_mask_rep[:, freq_bins_cutoff_top:, :] = 0
@@ -1394,11 +1401,11 @@ def generate_overlays(
                                     "instance_id": instance_counter
                                 })
                                 instance_counter += 1
-
                         else:
                             break
             
-        final_audio = transform_waveform(new_waveform, to_spec='power')
+        final_audio = transform_waveform(new_waveform, to_spec='power', specconfig=specconfig)
+
         final_audio = spectrogram_transformed(
             final_audio,
             highpass_hz=highpass_hz,
@@ -1422,7 +1429,7 @@ def generate_overlays(
             wav_path = f"classifiers/augmented_dataset/sound_files/{save_files_path}"
             if not os.path.exists(os.path.dirname(wav_path)):
                 os.makedirs(os.path.dirname(wav_path))
-            spec_to_audio(final_audio, save_to=wav_path, energy_type='power')
+            spec_to_audio(final_audio, save_to=wav_path, energy_type='power', specconfig=specconfig)
             
             coarse_labels_output_path = f'classifiers/augmented_dataset/labels.csv'
             with open(coarse_labels_output_path, 'a') as f:
@@ -1434,6 +1441,8 @@ def generate_overlays(
                 else:
                     if len(classes) > 0:
                         coarse_class = classes[-1]
+                    else:
+                        coarse_class = ''
                 f.write(f'{idx}.wav,{coarse_class}\n')
         
         if config['output']['include_spectrogram']:
@@ -1443,8 +1452,9 @@ def generate_overlays(
                 color_mode=color_mode,
                 log_scale=True,
                 normalise='power_to_PCEN',
-                resize=(640, 640),
+                resize=(config['output'].get('image_height', 640),config['output'].get('image_width', 640))
             )
+            # print(f'final_audio: {final_audio.shape}, image: {image.size}')
             image_output_path = f'{save_directory}/artificial_dataset/images/{save_files_path}.jpg'
         
             # check directory exists
@@ -1526,6 +1536,9 @@ def generate_overlays(
                 os.makedirs(os.path.dirname(unet_image_path), exist_ok=True)
                 os.makedirs(os.path.dirname(unet_mask_path), exist_ok=True)
                 os.makedirs(os.path.dirname(unet_labels_path), exist_ok=True)
+                # save config to generation_parameters.yaml
+                with open(f'{unet_base_path}/{split}/generation_parameters.yaml', 'w') as f:
+                    yaml.dump(config, f)
 
                 # Save the main spectrogram image as PNG
                 image.save(unet_image_path, format='PNG')
@@ -1610,6 +1623,10 @@ def generate_overlays(
 
                     # Write to file in the format [class_id x_center y_center width height]
                     f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
+
+        if plot and (not hasplotted) and idx>=2:
+            hasplotted=True
+            plot_labels(config, [0,3], save_directory)
         
     # After the main loop, save all collected annotations
     if config['output']['include_yolo_masks'] and yolo_data_for_files: # Check if dict is not empty
@@ -1705,8 +1722,8 @@ def generate_overlays(
                 coco_dataset['images'].append({
                     'id': idx_val_check, # Use the actual image index as ID
                     'file_name': img_file_name_coco,
-                    'width': config['output'].get('image_width', 640), # Use configured or default
-                    'height': config['output'].get('image_height', 640)
+                    'width': config['output'].get('image_height', 640), # Use configured or default
+                    'height': config['output'].get('image_width', 640)
                 })
 
             coco_dataset['categories'] = [] # Clear and repopulate
@@ -1741,9 +1758,6 @@ def generate_overlays(
             f.write('\n'.join(hrnet_val_list))
         print(f"Saved HRNet validation list to {val_lst_path}")
 
-    if plot:
-        plot_labels(config, [0,n], save_directory)
-
 def run_augmentation(config=None):
     """Main function to run the augmentation pipeline with given config"""
     if config is None:
@@ -1756,10 +1770,7 @@ def run_augmentation(config=None):
     positive_paths = config['paths']['vocalisations']
     negative_paths = config['paths']['negative']
 
-    if config['output']['rainbow_frequency']:
-        color_mode = 'HSV'
-    else:
-        color_mode = 'BW'
+    color_mode = config['output']['color_mode']
 
     print(f'Generating overlays for {config["output"]["n"]} images')
 

@@ -792,12 +792,16 @@ def spec_to_pil(spec, resize=None, iscomplex=False, normalise='power_to_PCEN', c
     
     return spec
 
-def spec_to_audio(spec, energy_type='power', save_to=None, normalise_rms=0.05, sample_rate=48000):
+def spec_to_audio(spec, energy_type='power', save_to=None, normalise_rms=0.05, sample_rate=48000, specconfig={
+        'n_fft': 2048,
+        'win_length': 2048,
+        'hop_length': 1024,
+    }):
     # convert back to waveform and save to wav for viewing testing
     waveform_transform = torchaudio.transforms.GriffinLim(
-        n_fft=2048, 
-        win_length=2048, 
-        hop_length=512, 
+        n_fft=specconfig['n_fft'],
+        win_length=specconfig['win_length'],
+        hop_length=specconfig['hop_length'],
         power=2.0
     )
     # if energy_type=='dB':
@@ -928,7 +932,7 @@ def complex_spectrogram_transformed(
     #         imaginary_part = pcen(imaginary_part)
 
     if to_pil:
-        return spec_to_pil(real_part + 1j * imaginary_part, resize=(640,640), iscomplex=True, normalise='complex_to_PCEN', color_mode='HSV')
+        return spec_to_pil(real_part + 1j * imaginary_part, resize=resize, iscomplex=True, normalise='complex_to_PCEN', color_mode='HSV')
 
     if to_numpy:
         return np.stack([real_part.numpy(), imaginary_part.numpy()], axis=-1)
@@ -1141,10 +1145,15 @@ def add_noise_to_waveform(waveform, noise_power, noise_type):
 
 def transform_waveform(waveform, 
         resample=[48000,48000], 
+        specconfig={
+            'n_fft':2048,
+            'win_length':2048, 
+            'hop_length':512
+        },
         random_crop_seconds=None, 
         crop_seconds=None,
         rms_normalised=None, 
-        set_db=None, 
+        set_db=None,
         to_spec=None, 
         add_white_noise=None, 
         add_pink_noise=None, 
@@ -1192,16 +1201,16 @@ def transform_waveform(waveform,
     if to_spec:
         if to_spec=='power':
             spec = torchaudio.transforms.Spectrogram(
-                n_fft=2048, 
-                win_length=2048, 
-                hop_length=512, 
+                n_fft=specconfig['n_fft'],
+                win_length=specconfig['win_length'], 
+                hop_length=specconfig['hop_length'], 
                 power=2.0
             )(waveform)
         elif to_spec=='energy':
             spec = torchaudio.transforms.Spectrogram(
-                n_fft=2048, 
-                win_length=2048, 
-                hop_length=512, 
+                n_fft=specconfig['n_fft'],
+                win_length=specconfig['win_length'], 
+                hop_length=specconfig['hop_length'], 
                 power=None,
             )(waveform)
         return spec

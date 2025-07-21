@@ -5,7 +5,7 @@ input:
   - mp3
   - flac
   limit_positives: 0
-  labels_format: 'spreadsheet' ##### 'folders'
+  labels_format: 'folders' ##### 'spreadsheet'
 output:
   highpass_variable: 1000
   include_boxes: true # time-frequency bounding boxes
@@ -16,8 +16,10 @@ output:
   include_unetplusplus_masks: true # very similar to hrnet masks but different structure and no lst files
   mask_threshold_db: 5
   log_scale_masks: true
-  include_soundfile: false
+  include_soundfile: false  
   include_spectrogram: true
+  image_height: 640
+  image_width: 640
   length: 10
   lowpass_variable: 100
   n: 1000
@@ -26,27 +28,32 @@ output:
   - 3
   overwrite_output_path: true
   positive_overlay_range:
-  - 1
-  - 2
+  - 0
+  - 3
+  color_mode: 'BW' # or 'HSV'
   rainbow_frequency: false
   repetitions:
   - 1
   - 4
-  single_class: true
+  single_class: false
   snr_range:
   - 0.05
   - 0.5
   val_ratio: 0.8
   concatenate: false
+  spec_params:
+    n_fft: 2048
+    win_length: 1024
+    hop_length: 512
 paths:
   hrnet_remote_dir: '/Users/kaspar/Library/CloudStorage/GoogleDrive-kaspar.kimutai@gmail.com/My Drive/Colab Notebooks/HRNet-Semantic-Segmentation/data' # this path is overwritten
   dataset: example_dataset
   do_train_val_split: false
-  negative: vocalisations_xc
+  negative: negative
   noise: noise
   output: augmented_dataset_output # this path is overwritten every time main.py runs
-  vocalisations: test_localisation_vocalisation
+  vocalisations: vocalisations
 plot:
   color_filter: dusk
-  toggle: false
+  toggle: true
   show_labels: true
