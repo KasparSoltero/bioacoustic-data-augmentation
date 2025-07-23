@@ -7,8 +7,8 @@ input:
   limit_positives: 0
   labels_format: 'folders' ##### 'spreadsheet'
 output:
-  highpass_variable: 1000
-  include_boxes: true # time-frequency bounding boxes
+  highpass_variable: 0 # 1000
+  include_boxes: false # time-frequency bounding boxes
   include_kaytoo: true # coarse labels (soundfile?)
   include_coco_masks: false
   include_yolo_masks: false
@@ -21,36 +21,36 @@ output:
   image_height: 640
   image_width: 640
   length: 10
-  lowpass_variable: 100
-  n: 1000
+  lowpass_variable: 0 # 100
+  n: 3
   negative_overlay_range:
   - 0
-  - 3
+  - 0
   overwrite_output_path: true
   positive_overlay_range:
-  - 0
+  - 3
   - 3
   color_mode: 'BW' # or 'HSV'
   rainbow_frequency: false
   repetitions:
-  - 1
-  - 4
+  - 2
+  - 2
   single_class: false
   snr_range:
-  - 0.05
-  - 0.5
+  - 0.1
+  - 0.9
   val_ratio: 0.8
   concatenate: false
   spec_params:
     n_fft: 2048
-    win_length: 1024
-    hop_length: 512
+    win_length: 2048
+    hop_length: 1024
 paths:
   hrnet_remote_dir: '/Users/kaspar/Library/CloudStorage/GoogleDrive-kaspar.kimutai@gmail.com/My Drive/Colab Notebooks/HRNet-Semantic-Segmentation/data' # this path is overwritten
   dataset: example_dataset
   do_train_val_split: false
   negative: negative
-  noise: noise
+  noise: temp_noise_bp
   output: augmented_dataset_output # this path is overwritten every time main.py runs
   vocalisations: vocalisations
 plot:

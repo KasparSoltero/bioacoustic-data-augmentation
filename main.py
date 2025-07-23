@@ -136,20 +136,6 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
         rgba_color = tuple(c / 255.0 for c in rgb) + (1.0,)
         hrnet_cmap_colors.append(rgba_color)
     hrnet_custom_cmap = ListedColormap(hrnet_cmap_colors)
-    # label_colors = [ #temp alternative
-    #     (1.0, 0.0, 0.0, 1.0),    # Red
-    #     (0.0, 1.0, 0.0, 1.0),    # Green
-    #     (0.0, 0.0, 1.0, 1.0),    # Blue
-    #     (1.0, 1.0, 0.0, 1.0),    # Yellow
-    #     (1.0, 0.0, 1.0, 1.0),    # Magenta
-    #     (0.0, 1.0, 1.0, 1.0),    # Cyan
-    #     (0.5, 0.0, 0.5, 1.0),    # Purple
-    #     (1.0, 0.65, 0.0, 1.0),   # Orange
-    #     (0.0, 0.5, 0.0, 1.0),    # Dark Green
-    #     (0.75, 0.75, 0.75, 1.0)  # Light Grey
-    # ]
-    # hrnet_cmap_colors = [(0,0,0,0)] + label_colors
-    # hrnet_custom_cmap = mcolors.ListedColormap(hrnet_cmap_colors)
 
     # Calculate the number of rows and columns for subplots
     if idx[1] == -1: # Default to plotting first 9 images if end index is -1
@@ -235,9 +221,38 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
         image_array = np.array(image)
         img_height, img_width = image_array.shape[0], image_array.shape[1] # Usually (height, width, channels)
 
+        # Plot the spectrogram image
+        cmap_to_use = None
+        if config['plot']['color_filter'] == 'dusk':
+            cmap_to_use = custom_color_maps['dusk']
+        elif not config['output']['rainbow_frequency']: # If not rainbow, use gray
+            cmap_to_use = 'gray'
+        # If rainbow_frequency is true and no dusk filter, cmap_to_use remains None (default matplotlib cmap)
+
+        
+        # Spectrogram Y-axis ticks (frequency)
+        # Assuming image_height corresponds to max_freq (e.g., 24000 Hz log-scaled)
+        # And image_array y-coords are 0 (top, high_freq_log) to img_height (bottom, low_freq_log)
+        log_yticks_pixel = map_frequency_to_log_scale(img_height, [0, 1000, 2000, 5000, 10000, 24000])
+        ax.set_yticks(log_yticks_pixel)
+        yticklabels = ['0', '1', '2', '5', '10', '24']
+        ax.set_yticklabels(yticklabels)
+        ax.imshow(image_array, aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap=cmap_to_use) # img_height for extent ymax
+
+        ax.set_title(f'{os.path.basename(image_path_basename)}', fontsize=9)
+        if current_image_set_row == base_rows -1 or (masks_enabled and spec_ax_row == actual_figure_rows -2): # Show X labels only on bottom-most spec row
+            ax.set_xlabel('Time (s)', fontsize=10)
+        else:
+            ax.set_xticklabels([])
+        ax.set_ylabel('Freq (kHz)', fontsize=10)
+        ax.tick_params(axis='both', which='major', labelsize=8)
+
         # Plot bounding boxes if enabled
         if config['output']['include_boxes']:
             print(f"Plotting bounding boxes for {image_path_basename}")
+            bbox_ax = axes[spec_ax_row+1][current_col_idx] if masks_enabled else ax
+            bbox_ax.set_yticks(log_yticks_pixel)
+            bbox_ax.set_yticklabels(yticklabels)
             # Construct label path: image_path_basename might be "0.jpg" or "train/0.jpg" etc.
             # So, label_path should be relative to box_labels directory
             label_file_name = os.path.splitext(image_path_basename)[0] + ".txt"
@@ -267,38 +282,12 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
 
                     rect = plt.Rectangle((x_min_time, y_min_freq), box_time_width, box_freq_height,
                                         linewidth=1, edgecolor=labelcolor, facecolor='none', alpha=0.8)
-                    ax.add_patch(rect)
+                    bbox_ax.add_patch(rect)
                     if config['plot']['show_labels']:
                         if ' ' in labeltext and len(labeltext) > 10: # Basic wrap
                             labeltext = labeltext.split(' ')[0] + '\n' + ' '.join(labeltext.split(' ')[1:])
-                        ax.text(x_min_time, y_min_freq + box_freq_height+10, labeltext, fontsize=10, color='#eeeeee',
+                        bbox_ax.text(x_min_time, y_min_freq + box_freq_height+10, labeltext, fontsize=10, color='#eeeeee',
                                 bbox=dict(facecolor='black', alpha=0.3, pad=0.8, edgecolor='none'))
-
-        # Plot the spectrogram image
-        cmap_to_use = None
-        if config['plot']['color_filter'] == 'dusk':
-            cmap_to_use = custom_color_maps['dusk']
-        elif not config['output']['rainbow_frequency']: # If not rainbow, use gray
-            cmap_to_use = 'gray'
-        # If rainbow_frequency is true and no dusk filter, cmap_to_use remains None (default matplotlib cmap)
-
-        
-        # Spectrogram Y-axis ticks (frequency)
-        # Assuming image_height corresponds to max_freq (e.g., 24000 Hz log-scaled)
-        # And image_array y-coords are 0 (top, high_freq_log) to img_height (bottom, low_freq_log)
-        log_yticks_pixel = map_frequency_to_log_scale(img_height, [0, 1000, 2000, 5000, 10000, 24000])
-        ax.set_yticks(log_yticks_pixel)
-        yticklabels = ['0', '1', '2', '5', '10', '24']
-        ax.set_yticklabels(yticklabels)
-        ax.imshow(image_array, aspect='auto', origin='upper', extent=[0, 10, 0, 24000], cmap=cmap_to_use) # img_height for extent ymax
-        
-        ax.set_title(f'{os.path.basename(image_path_basename)}', fontsize=9)
-        if current_image_set_row == base_rows -1 or (masks_enabled and spec_ax_row == actual_figure_rows -2): # Show X labels only on bottom-most spec row
-            ax.set_xlabel('Time (s)', fontsize=10)
-        else:
-            ax.set_xticklabels([])
-        ax.set_ylabel('Freq (kHz)', fontsize=10)
-        ax.tick_params(axis='both', which='major', labelsize=8)
 
         # Plot MASKS (YOLO or COCO) on the subplot below the spectrogram
         if masks_enabled:
@@ -308,11 +297,11 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                 continue # Skip mask plotting for this image
 
             thisax = axes[mask_ax_row][current_col_idx]
-            thisax.clear()
-            thisax.set_xticks([])
-            thisax.set_yticks([])
+            # thisax.clear()
+            # thisax.set_xticks([])
+            # thisax.set_yticks([])
             # Display a light version of the original image as background for masks
-            thisax.imshow(image_array, origin='upper', alpha=0.9, cmap=cmap_to_use)
+            # thisax.imshow(image_array, origin='upper', aspect='auto', alpha=0.9, cmap=cmap_to_use, extent=[0, 10, 0, 24000])
 
             if config['output']['include_yolo_masks']:
                 yolo_label_filename = os.path.splitext(image_path_basename)[0] + ".txt"
@@ -485,12 +474,14 @@ def plot_labels(config, idx=[0,-1], save_directory='output'):
                         mask_image = Image.open(unet_mask_path)
                         mask_array = np.array(mask_image)
                         
-                        # The existing hrnet_custom_cmap will work perfectly here
+                        # we need a temporary cmap that goes to red for every class
+                        temp_cmap = ListedColormap([(0,0,0,0)]+['#00ff00'] * (len(hrnet_cmap_colors) - 1))
                         thisax.imshow(mask_array, 
                                     origin='upper',
                                     aspect='auto',
-                                    cmap=hrnet_custom_cmap, 
+                                    cmap=temp_cmap,
                                     interpolation='none', 
+                                    extent=[0, 10, 0, 24000], 
                                     vmin=0, 
                                     vmax=len(hrnet_cmap_colors) - 1)
                         thisax.set_title(f'Unet++ Mask ({np.max(mask_array) if mask_array.size > 0 else 0} instances)', fontsize=8)
@@ -1624,9 +1615,9 @@ def generate_overlays(
                     # Write to file in the format [class_id x_center y_center width height]
                     f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
 
-        if plot and (not hasplotted) and idx>=2:
+        if plot and (not hasplotted) and idx>=0:
             hasplotted=True
-            plot_labels(config, [0,3], save_directory)
+            plot_labels(config, [0,1], save_directory)
         
     # After the main loop, save all collected annotations
     if config['output']['include_yolo_masks'] and yolo_data_for_files: # Check if dict is not empty
