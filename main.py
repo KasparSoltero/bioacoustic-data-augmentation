@@ -743,6 +743,7 @@ def read_tags(path, config, default_species='unknown'):
 
 def load_input_dataset(data_root, background_path, positive_path, negative_path, config):
     positive_segment_paths = []
+    n_per_class_dict = {}
     if config['input']['labels_format'] == 'spreadsheet':
         positive_datatags = read_tags(os.path.join(data_root, positive_path), config, 1)
         # randomly shuffle
@@ -753,6 +754,15 @@ def load_input_dataset(data_root, background_path, positive_path, negative_path,
                 print(f'Limiting positive examples to {config["input"]["limit_positives"]}')
                 print(f'chosen positives: {positive_segment_paths}')
                 break
+            if config['input']['limit_n_per_class'] and positive_datatags.get(os.path.join(data_root, positive_path, f)):
+                species_class = positive_datatags[os.path.join(data_root, positive_path, f)]['species']
+                if species_class not in n_per_class_dict:
+                    n_per_class_dict[species_class] = 0
+                if n_per_class_dict[species_class] < config['input']['limit_n_per_class']:
+                    n_per_class_dict[species_class] += 1
+                else:
+                    print(f'reached {config["input"]["limit_n_per_class"]} for {species_class}, skipping')
+                    continue
             if not f.startswith('.'):
                 fileextension = f.split('.')[-1]
                 if fileextension in config['input']['allowed_files']:
@@ -772,6 +782,14 @@ def load_input_dataset(data_root, background_path, positive_path, negative_path,
                         fileextension = f.split('.')[-1]
                         if fileextension in config['input']['allowed_files']:
                             file_path = os.path.join(data_root, positive_path, subdir, f)
+                            if config['input']['limit_n_per_class']:
+                                if species_class not in n_per_class_dict:
+                                    n_per_class_dict[species_class] = 0
+                                if n_per_class_dict[species_class] < config['input']['limit_n_per_class']:
+                                    n_per_class_dict[species_class] += 1
+                                else:
+                                    print(f'reached {config["input"]["limit_n_per_class"]} for {species_class}, skipping')
+                                    continue
                             positive_segment_paths.append(file_path)
                             positive_datatags[file_path] = {'filename': file_path, 'species': species_class, 'overlay_label': 'none'}
     
@@ -1624,9 +1642,9 @@ def generate_overlays(
                     # Write to file in the format [class_id x_center y_center width height]
                     f.write(f'{species_class} {x_center} {y_center} {width} {height}\n')
 
-        if plot and (not hasplotted) and idx>=2:
+        if plot and (not hasplotted) and idx>=2 and (idx % 3 == 0):
             hasplotted=True
-            plot_labels(config, [0,3], save_directory)
+            plot_labels(config, [idx-2,idx+1], save_directory)
         
     # After the main loop, save all collected annotations
     if config['output']['include_yolo_masks'] and yolo_data_for_files: # Check if dict is not empty

@@ -4,11 +4,12 @@ input:
   - wav
   - mp3
   - flac
-  limit_positives: 0
+  limit_positives: 0 # 0 to disable
+  limit_n_per_class: 5 # 0 to disable
   labels_format: 'folders' ##### 'spreadsheet'
 output:
-  highpass_variable: 1000
-  include_boxes: true # time-frequency bounding boxes
+  highpass_variable: 100
+  include_boxes: false # time-frequency bounding boxes
   include_kaytoo: true # coarse labels (soundfile?)
   include_coco_masks: false
   include_yolo_masks: false
@@ -21,15 +22,15 @@ output:
   image_height: 640
   image_width: 640
   length: 10
-  lowpass_variable: 100
+  lowpass_variable: 10
   n: 1000
   negative_overlay_range:
   - 0
   - 3
   overwrite_output_path: true
   positive_overlay_range:
-  - 0
-  - 3
+  - 1
+  - 5
   color_mode: 'BW' # or 'HSV'
   rainbow_frequency: false
   repetitions:
@@ -37,7 +38,7 @@ output:
   - 4
   single_class: false
   snr_range:
-  - 0.05
+  - 0.1
   - 0.5
   val_ratio: 0.8
   concatenate: false
